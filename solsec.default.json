@@ -1,24 +1,10 @@
 {
   "$schema": "https://solsec.ai/config.json",
-  "instructions": ["AGENTS.md"],
+  "instructions": [
+    "AGENTS.md"
+  ],
   "model": "gitlawb/mimo-v2.5-pro",
   "provider": {
-    "gitlawb": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Gitlawb Opengateway",
-      "options": {
-        "baseURL": "https://opengateway.gitlawb.com/v1"
-      },
-      "models": {
-        "mimo-v2.5-pro": {
-          "name": "MiMo V2.5 Pro",
-          "limit": {
-            "context": 1048576,
-            "output": 65536
-          }
-        }
-      }
-    },
     "opencode-zen": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "OpenCode Zen (Free)",
@@ -28,19 +14,31 @@
       "models": {
         "deepseek-v4-flash-free": {
           "name": "DeepSeek V4 Flash Free",
-          "limit": { "context": 131072, "output": 16384 }
+          "limit": {
+            "context": 131072,
+            "output": 16384
+          }
         },
         "glm-5-free": {
           "name": "GLM-5 Free",
-          "limit": { "context": 128000, "output": 16384 }
+          "limit": {
+            "context": 128000,
+            "output": 16384
+          }
         },
         "qwen-3.6-plus-free": {
           "name": "Qwen 3.6 Plus Free",
-          "limit": { "context": 131072, "output": 16384 }
+          "limit": {
+            "context": 131072,
+            "output": 16384
+          }
         },
         "trinity-large-preview-free": {
           "name": "Trinity Large Preview Free",
-          "limit": { "context": 131072, "output": 16384 }
+          "limit": {
+            "context": 131072,
+            "output": 16384
+          }
         }
       }
     },
@@ -52,13 +50,28 @@
       },
       "models": {
         "anthropic/claude-sonnet-4": {
-          "name": "Claude Sonnet 4 (Recommended)",
+          "name": "Claude Sonnet 4",
           "limit": { "context": 200000, "output": 16384 },
           "reasoning": true
         },
+        "anthropic/claude-sonnet-4.6": {
+          "name": "Claude Sonnet 4.6 (Optimized)",
+          "limit": { "context": 200000, "output": 65536 },
+          "reasoning": true
+        },
         "anthropic/claude-opus-4": {
-          "name": "Claude Opus 4 (Best Reasoning)",
+          "name": "Claude Opus 4",
           "limit": { "context": 200000, "output": 16384 },
+          "reasoning": true
+        },
+        "anthropic/claude-opus-4.6": {
+          "name": "Claude Opus 4.6 (Deep Analysis)",
+          "limit": { "context": 200000, "output": 65536 },
+          "reasoning": true
+        },
+        "anthropic/claude-opus-4.7": {
+          "name": "Claude Opus 4.7 (Best Reasoning)",
+          "limit": { "context": 200000, "output": 65536 },
           "reasoning": true
         },
         "openai/o3": {
@@ -78,6 +91,70 @@
         "qwen/qwen3-coder-plus": {
           "name": "Qwen 3 Coder Plus",
           "limit": { "context": 131072, "output": 16384 }
+        },
+        "owl-alpha": {
+          "name": "Owl Alpha",
+          "limit": { "context": 128000, "output": 16384 }
+        }
+      }
+    },
+    "aihubmix": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "AIHubMix",
+      "options": {
+        "baseURL": "https://api.aihubmix.com/v1"
+      },
+      "models": {
+        "xiaomi-mimo-v2.5-pro": {
+          "name": "MiMo V2.5 Pro",
+          "limit": {
+            "context": 1048576,
+            "output": 16384
+          }
+        },
+        "xiaomi-mimo-v2.5": {
+          "name": "MiMo V2.5",
+          "limit": {
+            "context": 1048576,
+            "output": 16384
+          }
+        },
+        "coding-xiaomi-mimo-v2.5-pro": {
+          "name": "Coding MiMo V2.5 Pro",
+          "limit": {
+            "context": 1048576,
+            "output": 16384
+          }
+        },
+        "coding-minimax-m2.7-free": {
+          "name": "Coding MiniMax M2.7 Free",
+          "limit": {
+            "context": 204800,
+            "output": 16384
+          }
+        },
+        "coding-minimax-m2.7": {
+          "name": "Coding MiniMax M2.7",
+          "limit": {
+            "context": 204800,
+            "output": 16384
+          }
+        }
+      }
+    },
+    "gitlawb": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Gitlawb Opengateway",
+      "options": {
+        "baseURL": "https://opengateway.gitlawb.com/v1"
+      },
+      "models": {
+        "mimo-v2.5-pro": {
+          "name": "MiMo V2.5 Pro",
+          "limit": {
+            "context": 1048576,
+            "output": 65536
+          }
         }
       }
     },
