@@ -704,18 +704,20 @@ export const RunCommand = effectCmd({
                 if (!text) continue
                 if (process.stdout.isTTY) {
                   if (part.time?.end) {
-                    // Completed thinking block - show full text
+                    // Completed thinking block - show full text in cyan
                     UI.empty()
-                    UI.println(`${UI.Style.TEXT_DIM}\u001b[3mThinking: ${text}\u001b[0m${UI.Style.TEXT_NORMAL}`)
+                    UI.println(`\u001b[36m💭 THINKING:\u001b[0m`)
+                    UI.println(`\u001b[36m${text}\u001b[0m`)
                     UI.empty()
                   } else {
-                    // Streaming thinking - show indicator
-                    process.stdout.write(`\r${UI.Style.TEXT_DIM}\u001b[3m💭 Thinking... ${text.slice(-80)}\u001b[0m`)
+                    // Streaming thinking - show in cyan, update in place
+                    const preview = text.length > 200 ? text.slice(0, 200) + "..." : text
+                    process.stdout.write(`\r\u001b[36m💭 THINKING: ${preview}\u001b[0m\x1b[K`)
                   }
                   continue
                 }
                 if (part.time?.end) {
-                  process.stdout.write(`Thinking: ${text}${EOL}`)
+                  process.stdout.write(`💭 THINKING: ${text}${EOL}`)
                 }
               }
             }
