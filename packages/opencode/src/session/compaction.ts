@@ -40,57 +40,110 @@ const PRUNE_PROTECTED_TOOLS = ["skill"]
 const DEFAULT_TAIL_TURNS = 2
 const MIN_PRESERVE_RECENT_TOKENS = 2_000
 const MAX_PRESERVE_RECENT_TOKENS = 8_000
-const SUMMARY_TEMPLATE = `Output exactly the Markdown structure shown inside <template> and keep the section order unchanged. Do not include the <template> tags in your response.
+const SUMMARY_TEMPLATE = `You are creating a context summary for a security audit session. This summary MUST preserve ALL technical details with ZERO intelligence loss.
+
+Output exactly the Markdown structure shown inside <template>. Do not include the <template> tags.
 <template>
 ## Goal
-- [single-sentence task summary]
+- [exact task description, preserve specific requirements]
 
 ## Constraints & Preferences
-- [user constraints, preferences, specs, or "(none)"]
+- [exact constraints, preferences, specifications]
+
+## Active Security Audit
+### Target Contracts
+| Contract | Address | Chain | Status |
+|----------|---------|-------|--------|
+| [name] | [exact address] | [chain] | [verified/unverified/partial] |
+
+### Verified Findings (CONFIRMED with evidence)
+For EACH finding, preserve:
+- **[SEVERITY] Title** — SWC-XXX
+  - File: \`path:line\`
+  - Code: \`\`\`solidity [exact vulnerable code snippet]\`\`\`
+  - Attack: [exact attack vector]
+  - PoC: [exact proof-of-concept if exists]
+  - Status: VERIFIED/UNCONFIRMED
+
+### False Positives (DISPROVEN)
+- [claim] — [exact reason it was disproven with code evidence]
+
+### Open Hypotheses
+- [claim] — [what needs verification] — [where to look]
+
+## Tool Results
+### Slither Output
+\`\`\`
+[preserve exact slither output or "not run yet"]
+\`\`\`
+
+### Mythril Output
+\`\`\`
+[preserve exact mythril output or "not run yet"]
+\`\`\`
+
+### Other Tools
+\`\`\`
+[forge, echidna, cast output or "not run yet"]
+\`\`\`
 
 ## Progress
 ### Done
-- [completed work or "(none)"]
+- [exact completed actions with results]
 
 ### In Progress
-- [current work or "(none)"]
+- [exact current action and partial results]
 
 ### Blocked
-- [blockers or "(none)"]
+- [exact blockers with error messages]
 
 ## Key Decisions
-- [decision and why, or "(none)"]
+- [decision] — [exact reasoning]
 
 ## Next Steps
-- [ordered next actions or "(none)"]
+1. [exact next action with parameters]
+2. [exact next action with parameters]
 
 ## Critical Context
-- [important technical facts, errors, open questions, or "(none)"]
+- Preserve ALL:
+  - Contract addresses and ABIs
+  - Function signatures and selectors
+  - Storage slot numbers
+  - Error messages and revert reasons
+  - Gas estimates
+  - Block numbers and timestamps
+  - RPC endpoints
+  - Tool commands used
+  - Exact file paths
+  - Code snippets with line numbers
 
 ## Relevant Files
-- [file or directory path: why it matters, or "(none)"]
+| Path | Purpose | Status |
+|------|---------|--------|
+| [exact path] | [why it matters] | [read/modified/created] |
 
-## Security Audit State
-### Contracts Being Analyzed
-- [contract addresses, names, chains, or "(none)"]
-
-### Findings So Far
-- [severity, title, file:line, verified status, or "(none)"]
-
-### Tools Run
-- [slither, mythril, forge results summary, or "(none)"]
-
-### Open Hypotheses
-- [unverified claims needing investigation, or "(none)"]
+## Exact Code Snippets
+Preserve any code that was:
+- Identified as vulnerable
+- Used in PoCs
+- Compared during analysis
+- Referenced in findings
+\`\`\`solidity
+[exact code with line numbers]
+\`\`\`
 </template>
 
-Rules:
-- Keep every section, even when empty.
-- Use terse bullets, not prose paragraphs.
-- Preserve exact file paths, commands, error strings, contract addresses, and identifiers when known.
-- Preserve ALL security findings with severity, file, line numbers, and verification status.
-- Preserve ALL contract addresses and chain information.
-- Do not mention the summary process or that context was compacted.`
+CRITICAL RULES:
+1. NEVER summarize code snippets — copy them VERBATIM
+2. NEVER omit line numbers — they are essential for re-verification
+3. NEVER omit contract addresses — they are needed for on-chain verification
+4. NEVER omit tool outputs — they contain evidence for findings
+5. NEVER simplify vulnerability descriptions — preserve exact attack vectors
+6. NEVER omit PoC code — it proves the vulnerability is real
+7. If a section has no content, write "(none)" — do NOT omit the section
+8. Preserve ALL function selectors (4-byte hex values)
+9. Preserve ALL storage slot numbers
+10. Preserve ALL error messages and revert strings`
 type Turn = {
   start: number
   end: number
