@@ -138,6 +138,12 @@ export const layer: Layer.Layer<
     const patchtool = yield* ApplyPatchTool
     const skilltool = yield* SkillTool
     const agent = yield* Agent.Service
+    const slithertool = yield* SlitherTool
+    const mythriltool = yield* MythrilTool
+    const forgetool = yield* ForgeTool
+    const solctool = yield* SolcTool
+    const echidnatool = yield* EchidnaTool
+    const manticoresool = yield* ManticoreTool
 
     const state = yield* InstanceState.make<State>(
       Effect.fn("ToolRegistry.state")(function* (ctx) {
@@ -247,12 +253,12 @@ export const layer: Layer.Layer<
           question: Tool.init(question),
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
-          slither: Tool.init(SlitherTool),
-          mythril: Tool.init(MythrilTool),
-          forge: Tool.init(ForgeTool),
-          solc: Tool.init(SolcTool),
-          echidna: Tool.init(EchidnaTool),
-          manticore: Tool.init(ManticoreTool),
+          slither: Tool.init(slithertool),
+          mythril: Tool.init(mythriltool),
+          forge: Tool.init(forgetool),
+          solc: Tool.init(solctool),
+          echidna: Tool.init(echidnatool),
+          manticore: Tool.init(manticoresool),
         })
 
         return {
