@@ -1,129 +1,108 @@
 <p align="center">
-  <a href="https://opencode.ai">
-    <picture>
-      <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
-      <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
-      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="OpenCode logo">
-    </picture>
-  </a>
-</p>
-<p align="center">The open source AI coding agent.</p>
-<p align="center">
-  <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/opencode/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/publish.yml?style=flat-square&branch=dev" /></a>
+  <h1 align="center">SOLSEC</h1>
+  <p align="center">Solidity Smart Contract Security Auditor</p>
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> |
-  <a href="README.zh.md">简体中文</a> |
-  <a href="README.zht.md">繁體中文</a> |
-  <a href="README.ko.md">한국어</a> |
-  <a href="README.de.md">Deutsch</a> |
-  <a href="README.es.md">Español</a> |
-  <a href="README.fr.md">Français</a> |
-  <a href="README.it.md">Italiano</a> |
-  <a href="README.da.md">Dansk</a> |
-  <a href="README.ja.md">日本語</a> |
-  <a href="README.pl.md">Polski</a> |
-  <a href="README.ru.md">Русский</a> |
-  <a href="README.bs.md">Bosanski</a> |
-  <a href="README.ar.md">العربية</a> |
-  <a href="README.no.md">Norsk</a> |
-  <a href="README.br.md">Português (Brasil)</a> |
-  <a href="README.th.md">ไทย</a> |
-  <a href="README.tr.md">Türkçe</a> |
-  <a href="README.uk.md">Українська</a> |
-  <a href="README.bn.md">বাংলা</a> |
-  <a href="README.gr.md">Ελληνικά</a> |
-  <a href="README.vi.md">Tiếng Việt</a>
+  <a href="https://github.com/ransolo33iq/solsec"><img alt="GitHub" src="https://img.shields.io/github/stars/ransolo33iq/solsec?style=flat-square" /></a>
 </p>
 
-[![OpenCode Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
-
 ---
 
-### Installation
+## What is Solsec?
+
+Solsec is an AI-powered Solidity security auditor built on top of [opencode](https://github.com/anomalyco/opencode). It specializes in finding vulnerabilities in smart contracts using:
+
+- **Slither** — Static analysis (100+ detectors)
+- **Mythril** — Symbolic execution
+- **Forge** — Compilation, testing, fuzzing
+- **Echidna** — Property-based fuzzing
+- **Solhint** — Linting
+
+## Installation
 
 ```bash
-# YOLO
-curl -fsSL https://opencode.ai/install | bash
+# From GitHub releases
+gh release download --repo ransolo33iq/solsec --pattern 'solsec-linux-x64' --dir /usr/local/bin/solsec
+chmod +x /usr/local/bin/solsec
 
-# Package managers
-npm i -g opencode-ai@latest        # or bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS and Linux (recommended, always up to date)
-brew install opencode              # macOS and Linux (official brew formula, updated less)
-sudo pacman -S opencode            # Arch Linux (Stable)
-paru -S opencode-bin               # Arch Linux (Latest from AUR)
-mise use -g opencode               # Any OS
-nix run nixpkgs#opencode           # or github:anomalyco/opencode for latest dev branch
+# Or build from source
+git clone https://github.com/ransolo33iq/solsec.git
+cd solsec
+bun install
+bun run --cwd packages/opencode build -- --single --baseline --skip-embed-web-ui
 ```
 
-> [!TIP]
-> Remove versions older than 0.1.x before installing.
-
-### Desktop App (BETA)
-
-OpenCode is also available as a desktop application. Download directly from the [releases page](https://github.com/anomalyco/opencode/releases) or [opencode.ai/download](https://opencode.ai/download).
-
-| Platform              | Download                           |
-| --------------------- | ---------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-mac-arm64.dmg`   |
-| macOS (Intel)         | `opencode-desktop-mac-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe` |
-| Linux                 | `.deb`, `.rpm`, or `.AppImage`     |
+## Usage
 
 ```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
+# Audit a contract
+solsec run "Audit this contract for vulnerabilities" 
+
+# With specific model
+solsec run -m gitlawb/mimo-v2.5-pro "Audit Vault.sol"
+
+# Interactive mode
+solsec
 ```
 
-#### Installation Directory
+## Features
 
-The install script respects the following priority order for the installation path:
+- **AGENTS.md** — Auto-loaded system prompt with 15-category vulnerability taxonomy
+- **Anti-Hallucination** — Every finding requires exact line numbers, code snippets, and PoC
+- **Thinking Display** — Shows model reasoning in real-time
+- **Context Saver** — Tracks findings across sessions via `.solsec/audit-state.json`
+- **Security Tools** — Integrated slither, mythril, forge, echidna, solhint
 
-1. `$OPENCODE_INSTALL_DIR` - Custom installation directory
-2. `$XDG_BIN_DIR` - XDG Base Directory Specification compliant path
-3. `$HOME/bin` - Standard user binary directory (if it exists or can be created)
-4. `$HOME/.opencode/bin` - Default fallback
+## Vulnerability Taxonomy
 
-```bash
-# Examples
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+Solsec checks for:
+1. Reentrancy (single-function, cross-function, read-only)
+2. Access Control
+3. Integer Overflow/Underflow
+4. Unchecked External Calls
+5. Front-Running / MEV
+6. Oracle Manipulation
+7. Flash Loan Attacks
+8. Denial of Service
+9. Logic Errors
+10. Merkle Proof Verification
+11. Arbitrary Function Selectors
+12. Code Quality & Hidden Risks
+13. Missing Events
+14. False Positive Prevention
+
+## Configuration
+
+Config file: `~/.config/solsec/solsec.json`
+
+```json
+{
+  "model": "gitlawb/mimo-v2.5-pro",
+  "provider": {
+    "gitlawb": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://opengateway.gitlawb.com/v1"
+      },
+      "models": {
+        "mimo-v2.5-pro": {
+          "name": "MiMo V2.5 Pro",
+          "limit": { "context": 131072, "output": 16384 }
+        }
+      }
+    }
+  }
+}
 ```
 
-### Agents
+## CI/CD
 
-OpenCode includes two built-in agents you can switch between with the `Tab` key.
+Every push to `master` builds binaries for:
+- Linux x64 / arm64
+- macOS x64 / arm64
+- Windows x64
 
-- **build** - Default, full-access agent for development work
-- **plan** - Read-only agent for analysis and code exploration
-  - Denies file edits by default
-  - Asks permission before running bash commands
-  - Ideal for exploring unfamiliar codebases or planning changes
+## Credits
 
-Also included is a **general** subagent for complex searches and multistep tasks.
-This is used internally and can be invoked using `@general` in messages.
-
-Learn more about [agents](https://opencode.ai/docs/agents).
-
-### Documentation
-
-For more info on how to configure OpenCode, [**head over to our docs**](https://opencode.ai/docs).
-
-### Contributing
-
-If you're interested in contributing to OpenCode, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
-
-### Building on OpenCode
-
-If you are working on a project that's related to OpenCode and is using "opencode" as part of its name, for example "opencode-dashboard" or "opencode-mobile", please add a note to your README to clarify that it is not built by the OpenCode team and is not affiliated with us in any way.
-
----
-
-**Join our community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+Built on [opencode](https://github.com/anomalyco/opencode) by the opencode team.
