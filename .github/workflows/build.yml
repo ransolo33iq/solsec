@@ -19,13 +19,13 @@ jobs:
         run: bun install
 
       - name: Build binary
-        run: bun run --cwd packages/opencode build -- --single --skip-embed-web-ui
+        run: bun run --cwd packages/opencode build -- --single --baseline --skip-embed-web-ui
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: solsec-linux-x64
-          path: packages/opencode/dist/solsec-linux-x64/bin/opencode
+          path: packages/opencode/dist/solsec-linux-x64-baseline/bin/opencode
           retention-days: 90
 
   build-linux-arm64:
