@@ -140,10 +140,15 @@ CRITICAL RULES:
 4. NEVER omit tool outputs — they contain evidence for findings
 5. NEVER simplify vulnerability descriptions — preserve exact attack vectors
 6. NEVER omit PoC code — it proves the vulnerability is real
-7. If a section has no content, write "(none)" — do NOT omit the section
-8. Preserve ALL function selectors (4-byte hex values)
-9. Preserve ALL storage slot numbers
-10. Preserve ALL error messages and revert strings`
+7. NEVER GUESS OR INFER — if you don't have exact data, write "UNKNOWN - needs verification"
+8. If a section has no content, write "(none)" — do NOT omit the section
+9. Preserve ALL function selectors (4-byte hex values)
+10. Preserve ALL storage slot numbers
+11. Preserve ALL error messages and revert strings
+12. EVERY finding MUST include: exact file, exact line, exact code snippet, exact attack vector
+13. If a finding lacks any of these, mark it as "UNCONFIRMED - missing evidence"
+14. NEVER claim something is "safe" or "not vulnerable" without citing exact code that proves it
+15. NEVER infer function behavior from names — verify against actual implementation``
 type Turn = {
   start: number
   end: number
