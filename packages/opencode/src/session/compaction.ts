@@ -148,7 +148,7 @@ CRITICAL RULES:
 12. EVERY finding MUST include: exact file, exact line, exact code snippet, exact attack vector
 13. If a finding lacks any of these, mark it as "UNCONFIRMED - missing evidence"
 14. NEVER claim something is "safe" or "not vulnerable" without citing exact code that proves it
-15. NEVER infer function behavior from names — verify against actual implementation``
+15. NEVER infer function behavior from names — verify against actual implementation`
 type Turn = {
   start: number
   end: number
