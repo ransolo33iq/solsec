@@ -1,0 +1,144 @@
+name: Build Solsec
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build-linux-x64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build binary
+        run: bun run --cwd packages/opencode build -- --single --skip-embed-web-ui
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: solsec-linux-x64
+          path: packages/opencode/dist/solsec-linux-x64/bin/opencode
+          retention-days: 90
+
+  build-linux-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build binary
+        run: bun run --cwd packages/opencode build -- --single --skip-embed-web-ui
+        env:
+          BUN_TARGET: linux-arm64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: solsec-linux-arm64
+          path: packages/opencode/dist/solsec-linux-arm64/bin/opencode
+          retention-days: 90
+
+  build-darwin-x64:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build binary
+        run: bun run --cwd packages/opencode build -- --single --skip-embed-web-ui
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: solsec-darwin-x64
+          path: packages/opencode/dist/solsec-darwin-x64/bin/opencode
+          retention-days: 90
+
+  build-darwin-arm64:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build binary
+        run: bun run --cwd packages/opencode build -- --single --skip-embed-web-ui
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: solsec-darwin-arm64
+          path: packages/opencode/dist/solsec-darwin-arm64/bin/opencode
+          retention-days: 90
+
+  build-windows-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build binary
+        run: bun run --cwd packages/opencode build -- --single --skip-embed-web-ui
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: solsec-windows-x64
+          path: packages/opencode/dist/solsec-windows-x64/bin/opencode.exe
+          retention-days: 90
+
+  release:
+    needs: [build-linux-x64, build-linux-arm64, build-darwin-x64, build-darwin-arm64, build-windows-x64]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.sha }}
+          name: Solsec Build ${{ github.sha }}
+          files: |
+            artifacts/solsec-linux-x64/opencode
+            artifacts/solsec-linux-arm64/opencode
+            artifacts/solsec-darwin-x64/opencode
+            artifacts/solsec-darwin-arm64/opencode
+            artifacts/solsec-windows-x64/opencode.exe
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
