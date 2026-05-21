@@ -1,8 +1,24 @@
 {
   "$schema": "https://solsec.ai/config.json",
   "instructions": ["AGENTS.md"],
-  "model": "anthropic/claude-sonnet-4",
+  "model": "gitlawb/mimo-v2.5-pro",
   "provider": {
+    "gitlawb": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Gitlawb Opengateway",
+      "options": {
+        "baseURL": "https://opengateway.gitlawb.com/v1"
+      },
+      "models": {
+        "mimo-v2.5-pro": {
+          "name": "MiMo V2.5 Pro",
+          "limit": {
+            "context": 1048576,
+            "output": 65536
+          }
+        }
+      }
+    },
     "opencode-zen": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "OpenCode Zen (Free)",
