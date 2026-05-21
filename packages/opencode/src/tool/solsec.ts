@@ -21,7 +21,6 @@ export const SlitherTool = Tool.define(
   "slither",
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner
-    const instance = yield* InstanceState.context
 
     return {
       get description() {
@@ -30,6 +29,7 @@ export const SlitherTool = Tool.define(
       parameters: SlitherParameters,
       execute: (params, ctx) =>
         Effect.gen(function* () {
+          const instance = yield* InstanceState.context
           const target = path.resolve(instance.directory, params.target)
           yield* ctx.metadata({ title: `Slither: ${path.basename(target)}`, metadata: {} })
 
@@ -107,7 +107,6 @@ export const MythrilTool = Tool.define(
   "mythril",
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner
-    const instance = yield* InstanceState.context
 
     return {
       get description() {
@@ -116,6 +115,7 @@ export const MythrilTool = Tool.define(
       parameters: MythrilParameters,
       execute: (params, ctx) =>
         Effect.gen(function* () {
+          const instance = yield* InstanceState.context
           const target = path.resolve(instance.directory, params.target)
           yield* ctx.metadata({ title: `Mythril: ${path.basename(target)}`, metadata: {} })
 
@@ -191,7 +191,6 @@ export const ForgeTool = Tool.define(
   "forge",
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner
-    const instance = yield* InstanceState.context
 
     return {
       get description() {
@@ -200,6 +199,7 @@ export const ForgeTool = Tool.define(
       parameters: ForgeParameters,
       execute: (params, ctx) =>
         Effect.gen(function* () {
+          const instance = yield* InstanceState.context
           const cwd = params.root ? path.resolve(instance.directory, params.root) : instance.directory
           yield* ctx.metadata({ title: `forge ${params.command}`, metadata: {} })
 
@@ -253,7 +253,6 @@ export const SolcTool = Tool.define(
   "solc",
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner
-    const instance = yield* InstanceState.context
 
     return {
       get description() {
@@ -262,6 +261,7 @@ export const SolcTool = Tool.define(
       parameters: SolcParameters,
       execute: (params, ctx) =>
         Effect.gen(function* () {
+          const instance = yield* InstanceState.context
           const target = path.resolve(instance.directory, params.target)
           yield* ctx.metadata({ title: `solc: ${path.basename(target)}`, metadata: {} })
 
@@ -318,7 +318,6 @@ export const EchidnaTool = Tool.define(
   "echidna",
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner
-    const instance = yield* InstanceState.context
 
     return {
       get description() {
@@ -327,6 +326,7 @@ export const EchidnaTool = Tool.define(
       parameters: EchidnaParameters,
       execute: (params, ctx) =>
         Effect.gen(function* () {
+          const instance = yield* InstanceState.context
           const target = path.resolve(instance.directory, params.target)
           yield* ctx.metadata({ title: `Echidna: ${params.contract}`, metadata: {} })
 
@@ -374,7 +374,6 @@ export const ManticoreTool = Tool.define(
   "manticore",
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner
-    const instance = yield* InstanceState.context
 
     return {
       get description() {
@@ -383,6 +382,7 @@ export const ManticoreTool = Tool.define(
       parameters: ManticoreParameters,
       execute: (params, ctx) =>
         Effect.gen(function* () {
+          const instance = yield* InstanceState.context
           const target = path.resolve(instance.directory, params.target)
           yield* ctx.metadata({ title: `Manticore: ${path.basename(target)}`, metadata: {} })
 
