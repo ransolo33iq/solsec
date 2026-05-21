@@ -249,7 +249,7 @@ export const RunCommand = effectCmd({
     const localInstance = yield* InstanceRef
     yield* Effect.promise(async () => {
       const rawMessage = [...args.message, ...(args["--"] || [])].join(" ")
-      const thinking = args.interactive ? (args.thinking ?? true) : (args.thinking ?? false)
+      const thinking = args.thinking ?? true
       const die = (message: string): never => {
         UI.error(message)
         process.exit(1)
@@ -698,18 +698,25 @@ export const RunCommand = effectCmd({
                 UI.empty()
               }
 
-              if (part.type === "reasoning" && part.time?.end && thinking) {
+              if (part.type === "reasoning" && thinking) {
                 if (emit("reasoning", { part })) continue
                 const text = part.text.trim()
                 if (!text) continue
-                const line = `Thinking: ${text}`
                 if (process.stdout.isTTY) {
-                  UI.empty()
-                  UI.println(`${UI.Style.TEXT_DIM}\u001b[3m${line}\u001b[0m${UI.Style.TEXT_NORMAL}`)
-                  UI.empty()
+                  if (part.time?.end) {
+                    // Completed thinking block - show full text
+                    UI.empty()
+                    UI.println(`${UI.Style.TEXT_DIM}\u001b[3mThinking: ${text}\u001b[0m${UI.Style.TEXT_NORMAL}`)
+                    UI.empty()
+                  } else {
+                    // Streaming thinking - show indicator
+                    process.stdout.write(`\r${UI.Style.TEXT_DIM}\u001b[3m💭 Thinking... ${text.slice(-80)}\u001b[0m`)
+                  }
                   continue
                 }
-                process.stdout.write(line + EOL)
+                if (part.time?.end) {
+                  process.stdout.write(`Thinking: ${text}${EOL}`)
+                }
               }
             }
 
