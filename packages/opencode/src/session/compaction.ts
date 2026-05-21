@@ -20,6 +20,7 @@ import { serviceUse } from "@/effect/service-use"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { SessionEvent } from "@solsec-ai/core/session-event"
+import { AuditState } from "./audit-state"
 
 const log = Log.create({ service: "session.compaction" })
 
@@ -68,12 +69,27 @@ const SUMMARY_TEMPLATE = `Output exactly the Markdown structure shown inside <te
 
 ## Relevant Files
 - [file or directory path: why it matters, or "(none)"]
+
+## Security Audit State
+### Contracts Being Analyzed
+- [contract addresses, names, chains, or "(none)"]
+
+### Findings So Far
+- [severity, title, file:line, verified status, or "(none)"]
+
+### Tools Run
+- [slither, mythril, forge results summary, or "(none)"]
+
+### Open Hypotheses
+- [unverified claims needing investigation, or "(none)"]
 </template>
 
 Rules:
 - Keep every section, even when empty.
 - Use terse bullets, not prose paragraphs.
-- Preserve exact file paths, commands, error strings, and identifiers when known.
+- Preserve exact file paths, commands, error strings, contract addresses, and identifiers when known.
+- Preserve ALL security findings with severity, file, line numbers, and verification status.
+- Preserve ALL contract addresses and chain information.
 - Do not mention the summary process or that context was compacted.`
 type Turn = {
   start: number
@@ -221,6 +237,7 @@ export const layer = Layer.effect(
     const provider = yield* Provider.Service
     const events = yield* EventV2Bridge.Service
     const flags = yield* RuntimeFlags.Service
+    const auditState = yield* AuditState.Service
 
     const isOverflow = Effect.fn("SessionCompaction.isOverflow")(function* (input: {
       tokens: MessageV2.Assistant["tokens"]
@@ -400,7 +417,12 @@ export const layer = Layer.effect(
         { sessionID: input.sessionID },
         { context: [], prompt: undefined },
       )
-      const nextPrompt = compacting.prompt ?? buildPrompt({ previousSummary, context: compacting.context })
+      // Inject audit-state context for security audits
+      const auditState = yield* AuditState.Service
+      const auditCtx = yield* auditState.context().pipe(Effect.catch(() => Effect.succeed("")))
+      const contextParts = [...compacting.context]
+      if (auditCtx) contextParts.push(auditCtx)
+      const nextPrompt = compacting.prompt ?? buildPrompt({ previousSummary, context: contextParts })
       const msgs = structuredClone(selected.head)
       yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
       const modelMessages = yield* MessageV2.toModelMessagesEffect(msgs, model, {
@@ -633,6 +655,7 @@ export const defaultLayer = Layer.suspend(() =>
     Layer.provide(Config.defaultLayer),
     Layer.provide(RuntimeFlags.defaultLayer),
     Layer.provide(EventV2Bridge.defaultLayer),
+    Layer.provide(AuditState.defaultLayer),
   ),
 )
 
