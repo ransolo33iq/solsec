@@ -59,7 +59,7 @@ import { DialogWorkspaceUnavailable } from "../dialog-workspace-unavailable"
 import { useArgs } from "@tui/context/args"
 import { Flag } from "@solsec-ai/core/flag/flag"
 import { type WorkspaceStatus } from "../workspace-label"
-import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut, useLeaderActive, useOpencodeKeymap } from "../../keymap"
+import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut, useCommandSlashes, useLeaderActive, useOpencodeKeymap } from "../../keymap"
 import { useTuiConfig } from "../../context/tui-config"
 
 export type PromptProps = {
@@ -152,6 +152,7 @@ export function Prompt(props: PromptProps) {
   const history = usePromptHistory()
   const stash = usePromptStash()
   const keymap = useOpencodeKeymap()
+  const slashes = useCommandSlashes()
   const agentShortcut = useCommandShortcut("agent.cycle")
   const paletteShortcut = useCommandShortcut("command.palette.show")
   const renderer = useRenderer()
@@ -1175,6 +1176,22 @@ export function Prompt(props: PromptProps) {
             ...x,
           })),
       })
+    } else if (
+      inputText.startsWith("/") &&
+      iife(() => {
+        const firstLine = inputText.split("\n")[0]
+        const command = firstLine.split(" ")[0].slice(1)
+        return slashes().some(
+          (s) => s.display === `/${command}` || s.aliases?.includes(`/${command}`),
+        )
+      })
+    ) {
+      const firstLine = inputText.split("\n")[0]
+      const command = firstLine.split(" ")[0].slice(1)
+      const match = slashes().find(
+        (s) => s.display === `/${command}` || s.aliases?.includes(`/${command}`),
+      )
+      if (match) match.onSelect?.()
     } else {
       sdk.client.session
         .prompt({
