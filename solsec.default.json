@@ -1,9 +1,14 @@
 {
   "$schema": "https://solsec.ai/config.json",
-  "instructions": [
-    "AGENTS.md"
-  ],
+  "instructions": ["AGENTS.md"],
   "model": "gitlawb/mimo-v2.5-pro",
+  "compaction": {
+    "auto": true,
+    "tail_turns": 3,
+    "preserve_recent_tokens": 8000,
+    "reserved": 20000,
+    "prune": true
+  },
   "provider": {
     "opencode-zen": {
       "npm": "@ai-sdk/openai-compatible",
