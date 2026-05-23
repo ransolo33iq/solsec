@@ -3,9 +3,34 @@ import { Context, Effect, Layer } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import { AppFileSystem } from "@solsec-ai/core/filesystem"
 
+export type Lane = "pre-deploy" | "1day" | "0day"
+export type Severity = "Critical" | "High" | "Medium" | "Low" | "Informational"
+export type ImmunefiSeverity = "Critical" | "High" | "Medium" | "Low" | "None"
+
+export interface PocRef {
+  path: string
+  status: "PASS" | "FAIL" | "PENDING"
+  fork_url?: string
+  fork_block?: number
+  attacker?: string
+  victim?: string
+  profit_wei?: string
+  profit_usd?: number
+  gas_used?: number
+  trace_excerpt?: string
+}
+
+export interface InvariantRef {
+  name: string
+  description: string
+  prover: "halmos" | "kontrol" | "echidna" | "medusa" | "forge"
+  status: "PROVED" | "FAILED" | "TIMEOUT" | "PENDING"
+  counterexample?: string
+}
+
 export interface Finding {
   id: string
-  severity: "Critical" | "High" | "Medium" | "Low" | "Informational"
+  severity: Severity
   title: string
   file: string
   lines: string
@@ -14,6 +39,28 @@ export interface Finding {
   evidence_hash: string
   verified: boolean
   timestamp: string
+
+  // — added in v2 —
+  detector_id?: string // e.g. "slither:reentrancy-eth", "semgrep:solidity-reentrancy-eth-call-before-state"
+  taxonomy?: string
+  function?: string
+  selector?: string
+  description?: string
+  fix?: string
+  poc?: PocRef
+  cvss?: string
+  immunefi_severity?: ImmunefiSeverity
+  chain_id?: number
+  rationale?: string
+  source_agent?: string
+}
+
+export interface TargetSpec {
+  kind: "address" | "path" | "git"
+  spec: string
+  address?: string
+  chain?: string
+  chain_id?: number
 }
 
 export interface AuditState {
@@ -27,6 +74,14 @@ export interface AuditState {
   hypotheses: { claim: string; needs_verification: string; file?: string }[]
   debunked: { claim: string; reason: string }[]
   findings: Finding[]
+
+  // — added in v2 —
+  lane?: Lane
+  targets?: TargetSpec[]
+  pocs?: PocRef[]
+  invariants?: InvariantRef[]
+  kb_version?: string
+  tools_used?: string[]
 }
 
 export interface Interface {
@@ -37,13 +92,17 @@ export interface Interface {
   readonly addFact: (claim: string, evidence: string, file: string, line: number) => Effect.Effect<void, never>
   readonly addHypothesis: (claim: string, needs_verification: string, file?: string) => Effect.Effect<void, never>
   readonly addDebunked: (claim: string, reason: string) => Effect.Effect<void, never>
+  readonly addPoc: (poc: PocRef) => Effect.Effect<void, never>
+  readonly addInvariant: (inv: InvariantRef) => Effect.Effect<void, never>
+  readonly setLane: (lane: Lane) => Effect.Effect<void, never>
+  readonly setTargets: (targets: TargetSpec[]) => Effect.Effect<void, never>
   readonly context: () => Effect.Effect<string, never>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@solsec/AuditState") {}
 
 const empty = (project: string): AuditState => ({
-  version: 1,
+  version: 2,
   project,
   started_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
@@ -53,7 +112,28 @@ const empty = (project: string): AuditState => ({
   hypotheses: [],
   debunked: [],
   findings: [],
+  pocs: [],
+  invariants: [],
+  targets: [],
+  tools_used: [],
 })
+
+function migrate(parsed: any, project: string): AuditState {
+  // v1 → v2 migration: copy known fields, add empty new ones.
+  if (parsed && parsed.version === 1) {
+    return {
+      ...empty(project),
+      ...parsed,
+      version: 2,
+      pocs: parsed.pocs ?? [],
+      invariants: parsed.invariants ?? [],
+      targets: parsed.targets ?? [],
+      tools_used: parsed.tools_used ?? [],
+    } as AuditState
+  }
+  if (parsed && parsed.version === 2) return parsed as AuditState
+  return empty(project)
+}
 
 export const layer = Layer.effect(
   Service,
@@ -66,10 +146,18 @@ export const layer = Layer.effect(
         const dir = ctx.directory
         const statePath = path.join(dir, ".solsec", "audit-state.json")
         const raw = yield* fs.readFileString(statePath).pipe(Effect.catch(() => Effect.succeed("")))
-        const parsed = raw ? (() => { try { return JSON.parse(raw) } catch { return null } })() : null
+        const parsed = raw
+          ? (() => {
+              try {
+                return JSON.parse(raw)
+              } catch {
+                return null
+              }
+            })()
+          : null
         return {
           path: statePath,
-          data: (parsed && parsed.version === 1 ? parsed : empty(path.basename(dir))) as AuditState,
+          data: migrate(parsed, path.basename(dir)),
         }
       }),
     )
@@ -131,6 +219,36 @@ export const layer = Layer.effect(
       yield* save()
     })
 
+    const addPoc = Effect.fn("AuditState.addPoc")(function* (poc: PocRef) {
+      const s = yield* InstanceState.get(state)
+      s.data.pocs ??= []
+      const idx = s.data.pocs.findIndex((p) => p.path === poc.path)
+      if (idx >= 0) s.data.pocs[idx] = poc
+      else s.data.pocs.push(poc)
+      yield* save()
+    })
+
+    const addInvariant = Effect.fn("AuditState.addInvariant")(function* (inv: InvariantRef) {
+      const s = yield* InstanceState.get(state)
+      s.data.invariants ??= []
+      const idx = s.data.invariants.findIndex((i) => i.name === inv.name)
+      if (idx >= 0) s.data.invariants[idx] = inv
+      else s.data.invariants.push(inv)
+      yield* save()
+    })
+
+    const setLane = Effect.fn("AuditState.setLane")(function* (lane: Lane) {
+      const s = yield* InstanceState.get(state)
+      s.data.lane = lane
+      yield* save()
+    })
+
+    const setTargets = Effect.fn("AuditState.setTargets")(function* (targets: TargetSpec[]) {
+      const s = yield* InstanceState.get(state)
+      s.data.targets = targets
+      yield* save()
+    })
+
     const context = Effect.fn("AuditState.context")(function* () {
       const s = yield* InstanceState.get(state)
       const d = s.data
@@ -156,17 +274,39 @@ export const layer = Layer.effect(
         ? d.debunked.map((d2) => `  - ${d2.claim} (reason: ${d2.reason})`).join("\n")
         : "  (none yet)"
 
+      const pocs = (d.pocs ?? []).length > 0
+        ? d.pocs!
+            .map((p) => `  - ${p.path} [${p.status}] profit=${p.profit_wei ?? "—"} block=${p.fork_block ?? "—"}`)
+            .join("\n")
+        : "  (none yet)"
+
+      const invariants = (d.invariants ?? []).length > 0
+        ? d.invariants!.map((i) => `  - ${i.name} [${i.prover}/${i.status}] ${i.description}`).join("\n")
+        : "  (none yet)"
+
       return [
         `<audit-state>`,
         `Project: ${d.project}`,
+        `Lane: ${d.lane ?? "(unset)"}`,
         `Audit started: ${d.started_at}`,
         `Last updated: ${d.updated_at}`,
+        ``,
+        `Targets:`,
+        (d.targets ?? []).length > 0
+          ? d.targets!.map((t) => `  - ${t.kind}: ${t.spec}${t.chain ? ` @${t.chain}` : ""}`).join("\n")
+          : "  (none yet)",
         ``,
         `Files audited (${d.files_audited.length}):`,
         d.files_audited.length > 0 ? d.files_audited.map((f) => `  [x] ${f}`).join("\n") : "  (none yet)",
         ``,
         `Findings (${d.findings.length}):`,
         findings,
+        ``,
+        `PoCs:`,
+        pocs,
+        ``,
+        `Invariants:`,
+        invariants,
         ``,
         `Verified Facts:`,
         facts,
@@ -180,7 +320,20 @@ export const layer = Layer.effect(
       ].join("\n")
     })
 
-    return Service.of({ read, write, addFinding, markFileAudited, addFact, addHypothesis, addDebunked, context })
+    return Service.of({
+      read,
+      write,
+      addFinding,
+      markFileAudited,
+      addFact,
+      addHypothesis,
+      addDebunked,
+      addPoc,
+      addInvariant,
+      setLane,
+      setTargets,
+      context,
+    })
   }),
 )
 

@@ -1,9 +1,70 @@
 {
   "$schema": "https://solsec.ai/config.json",
   "provider": {},
-  "permission": {},
+  "permission": {
+    // Default: ask before any tool runs. Specific tools below are pre-allowed.
+    "bash": {
+      // Audit toolchain — run without asking.
+      "slither *": "allow",
+      "myth *": "allow",
+      "aderyn *": "allow",
+      "semgrep *": "allow",
+      "wake *": "allow",
+      "halmos *": "allow",
+      "kontrol *": "allow",
+      "medusa *": "allow",
+      "echidna *": "allow",
+      "manticore *": "allow",
+      "heimdall *": "allow",
+      "solhint *": "allow",
+      "solc *": "allow",
+      "solc-select *": "allow",
+
+      // Foundry — run without asking.
+      "forge *": "allow",
+      "cast *": "allow",
+      "anvil *": "allow",
+      "chisel *": "allow",
+
+      // Solsec own CLIs — run without asking.
+      "solsec doctor *": "allow",
+      "solsec kb *": "allow",
+      "solsec exploits *": "allow",
+      "solsec immunefi *": "allow",
+      "solsec slither-parse *": "allow",
+      "solsec token-flow *": "allow",
+      "solsec poc *": "allow",
+      "solsec snapshot *": "allow",
+      "solsec backup *": "ask", // backup pushes data off-machine — confirm.
+      "solsec report *": "allow",
+
+      // Local read-only utilities — allow.
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git status*": "allow",
+      "git show*": "allow",
+      "ls *": "allow",
+      "rg *": "allow",
+
+      // Risky / out of scope by default. Anything not in the allowlist asks.
+      "*": "ask",
+
+      // Hard-deny obviously dangerous patterns.
+      "rm -rf /*": "deny",
+      "rm -rf ~*": "deny",
+      "sudo *": "deny",
+      "curl *| sh*": "deny",
+      "curl *| bash*": "deny",
+      "wget *| sh*": "deny",
+      "wget *| bash*": "deny",
+    },
+    "edit": "allow",
+    "webfetch": "ask",
+    "websearch": "allow",
+  },
   "mcp": {},
   "tools": {
+    // GitHub workflow tools (opencode-internal) — disabled by default.
     "github-triage": false,
     "github-pr-search": false,
   },

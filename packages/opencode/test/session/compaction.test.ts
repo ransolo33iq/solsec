@@ -31,6 +31,7 @@ import { SyncEvent } from "@/sync"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { LLMEvent, Usage } from "@solsec-ai/llm"
+import { AuditState } from "@/session/audit-state"
 
 void Log.init({ print: false })
 
@@ -234,6 +235,7 @@ const deps = Layer.mergeAll(
   SyncEvent.defaultLayer,
   RuntimeFlags.layer({ experimentalEventSystem: true }),
   EventV2Bridge.defaultLayer,
+  AuditState.defaultLayer,
 )
 
 const env = Layer.mergeAll(
@@ -284,6 +286,7 @@ function compactionProcessLayer(options?: CompactionProcessOptions) {
     Layer.provide(SyncEvent.defaultLayer),
     Layer.provide(RuntimeFlags.layer({ experimentalEventSystem: true })),
     Layer.provide(EventV2Bridge.defaultLayer),
+    Layer.provide(AuditState.defaultLayer),
   )
 }
 

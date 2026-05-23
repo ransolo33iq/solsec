@@ -1,0 +1,52 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.20;
+
+import "forge-std/Test.sol";
+
+// {{POC_DESCRIPTION}}
+//
+// IMPORTANT INVARIANTS:
+//   1. Use only legitimate state transitions. NEVER vm.store into protocol storage.
+//   2. Pin the fork block. Reproducibility > convenience.
+//   3. Assert on profit, not balance equality.
+//   4. Acquire prerequisite tokens via Uniswap / flashloan / faucet — not vm.deal.
+
+interface IERC20 {
+    function balanceOf(address) external view returns (uint256);
+    function transfer(address, uint256) external returns (bool);
+    function approve(address, uint256) external returns (bool);
+    function transferFrom(address, address, uint256) external returns (bool);
+}
+
+contract {{CONTRACT_NAME}}Test is Test {
+    address constant TARGET = {{TARGET_ADDRESS}};
+    address constant ATTACKER_TOKEN_SOURCE = {{TOKEN_SOURCE}}; // optional whale to seed from
+
+    address attacker;
+    address victim;
+    uint256 forkId;
+
+    function setUp() public {
+        forkId = vm.createSelectFork(vm.envOr("RPC", string("{{FALLBACK_RPC}}")), {{FORK_BLOCK}});
+        attacker = makeAddr("attacker");
+        victim = makeAddr("victim");
+        vm.deal(attacker, 1 ether); // gas only
+        // {{TODO: seed attacker with prerequisite tokens via legitimate transfer}}
+    }
+
+    function testExploit_{{CONTRACT_NAME}}() public {
+        uint256 attackerBalanceBefore = attacker.balance;
+
+        vm.startPrank(attacker);
+        // {{TODO: attack steps}}
+        vm.stopPrank();
+
+        uint256 attackerBalanceAfter = attacker.balance;
+        assertGt(
+            attackerBalanceAfter,
+            attackerBalanceBefore,
+            "exploit must increase attacker balance"
+        );
+        emit log_named_uint("profit_wei", attackerBalanceAfter - attackerBalanceBefore);
+    }
+}

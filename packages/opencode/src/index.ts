@@ -30,6 +30,20 @@ import { WebCommand } from "./cli/cmd/web"
 import { PrCommand } from "./cli/cmd/pr"
 import { SessionCommand } from "./cli/cmd/session"
 import { DbCommand } from "./cli/cmd/db"
+import { DoctorCommand } from "./cli/cmd/doctor"
+import { BootstrapCommand, StatusCommand as BootstrapStatusCommand } from "./cli/cmd/bootstrap"
+import { autoProvisionOnLaunch } from "./cli/cmd/bootstrap/lib"
+import {
+  SlitherParseCommand,
+  ImmunefiCommand,
+  TokenFlowCommand,
+  ExploitsCommand,
+  PocCommand,
+  SnapshotCommand,
+  BackupCommand,
+  KbCommand,
+  ReportCommand,
+} from "./cli/cmd/audit"
 import path from "path"
 import { Global } from "@solsec-ai/core/global"
 import { JsonMigration } from "@/storage/json-migration"
@@ -152,6 +166,22 @@ const cli = yargs(args)
       }
       process.stderr.write("Database migration complete." + EOL)
     }
+
+    // First-launch: drop bundled subagents, semgrep ruleset, /audit command,
+    // report templates, and AGENTS.md preamble into the user's solsec config
+    // dir. Lightweight (no network, no subprocess); heavy install / KB refresh
+    // is the explicit `solsec bootstrap` command.
+    try {
+      const provisioned = await autoProvisionOnLaunch()
+      if (provisioned) {
+        process.stderr.write(
+          "solsec: provisioned bundled agents, templates, and rules. Run `solsec bootstrap` once to install audit tools + refresh exploit KB." +
+            EOL,
+        )
+      }
+    } catch (e) {
+      Log.Default.warn("autoProvisionOnLaunch failed", { e: String(e) })
+    }
   })
   .usage("")
   .completion("completion", "generate shell completion script")
@@ -178,6 +208,18 @@ const cli = yargs(args)
   .command(SessionCommand)
   .command(PluginCommand)
   .command(DbCommand)
+  .command(DoctorCommand)
+  .command(BootstrapCommand)
+  .command(BootstrapStatusCommand)
+  .command(SlitherParseCommand)
+  .command(ImmunefiCommand)
+  .command(TokenFlowCommand)
+  .command(ExploitsCommand)
+  .command(PocCommand)
+  .command(SnapshotCommand)
+  .command(BackupCommand)
+  .command(KbCommand)
+  .command(ReportCommand)
   .fail((msg, err) => {
     if (
       msg?.startsWith("Unknown argument") ||

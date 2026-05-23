@@ -476,7 +476,6 @@ export const layer = Layer.effect(
         { context: [], prompt: undefined },
       )
       // Inject audit-state context for security audits
-      const auditState = yield* AuditState.Service
       const auditCtx = yield* auditState.context().pipe(Effect.catch(() => Effect.succeed("")))
       const contextParts = [...compacting.context]
       if (auditCtx) contextParts.push(auditCtx)

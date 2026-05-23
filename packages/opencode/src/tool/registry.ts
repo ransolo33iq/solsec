@@ -30,7 +30,26 @@ import * as Log from "@solsec-ai/core/util/log"
 import { LspTool } from "./lsp"
 import * as Truncate from "./truncate"
 import { ApplyPatchTool } from "./apply_patch"
-import { SlitherTool, MythrilTool, ForgeTool, SolcTool, EchidnaTool, ManticoreTool } from "./solsec"
+import {
+  SlitherTool,
+  MythrilTool,
+  ForgeTool,
+  SolcTool,
+  EchidnaTool,
+  ManticoreTool,
+  HalmosTool,
+  KontrolTool,
+  MedusaTool,
+  AderynTool,
+  SemgrepTool,
+  HeimdallTool,
+  WakeTool,
+  CastTool,
+  SolhintTool,
+  AnvilTool,
+  ForgeForkTestTool,
+  EchidnaInvariantTool,
+} from "./solsec"
 import { Glob } from "@solsec-ai/core/util/glob"
 import path from "path"
 import { pathToFileURL } from "url"
@@ -144,6 +163,18 @@ export const layer: Layer.Layer<
     const solctool = yield* SolcTool
     const echidnatool = yield* EchidnaTool
     const manticoresool = yield* ManticoreTool
+    const halmostool = yield* HalmosTool
+    const kontroltool = yield* KontrolTool
+    const medusatool = yield* MedusaTool
+    const aderyntool = yield* AderynTool
+    const semgreptool = yield* SemgrepTool
+    const heimdalltool = yield* HeimdallTool
+    const waketool = yield* WakeTool
+    const casttool = yield* CastTool
+    const solhinttool = yield* SolhintTool
+    const anviltool = yield* AnvilTool
+    const forgeforkest = yield* ForgeForkTestTool
+    const echidnainv = yield* EchidnaInvariantTool
 
     const state = yield* InstanceState.make<State>(
       Effect.fn("ToolRegistry.state")(function* (ctx) {
@@ -259,6 +290,18 @@ export const layer: Layer.Layer<
           solc: Tool.init(solctool),
           echidna: Tool.init(echidnatool),
           manticore: Tool.init(manticoresool),
+          halmos: Tool.init(halmostool),
+          kontrol: Tool.init(kontroltool),
+          medusa: Tool.init(medusatool),
+          aderyn: Tool.init(aderyntool),
+          semgrep: Tool.init(semgreptool),
+          heimdall: Tool.init(heimdalltool),
+          wake: Tool.init(waketool),
+          cast: Tool.init(casttool),
+          solhint: Tool.init(solhinttool),
+          anvil: Tool.init(anviltool),
+          forge_fork_test: Tool.init(forgeforkest),
+          echidna_invariant: Tool.init(echidnainv),
         })
 
         return {
@@ -288,6 +331,18 @@ export const layer: Layer.Layer<
             tool.solc,
             tool.echidna,
             tool.manticore,
+            tool.halmos,
+            tool.kontrol,
+            tool.medusa,
+            tool.aderyn,
+            tool.semgrep,
+            tool.heimdall,
+            tool.wake,
+            tool.cast,
+            tool.solhint,
+            tool.anvil,
+            tool.forge_fork_test,
+            tool.echidna_invariant,
           ],
           task: tool.task,
           read: tool.read,

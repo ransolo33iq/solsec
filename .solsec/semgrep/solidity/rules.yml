@@ -1,0 +1,518 @@
+rules:
+  # ──────────────────────────────────────────────────────────────────────────
+  # 1. Reentrancy (SWC-107)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: solidity-reentrancy-eth-call-before-state
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: ERROR
+    message: |
+      External `.call{value:}` before state mutation. Classic SWC-107 reentrancy
+      pattern. Apply CEI: update balances/state BEFORE the call, or use OpenZeppelin
+      ReentrancyGuard.
+    metadata:
+      taxonomy: "Reentrancy"
+      swc: "SWC-107"
+      defi_critical: true
+    pattern-either:
+      - pattern: |
+          (bool $OK,) = $TARGET.call{value: $AMT}("");
+          ...
+          $BAL[$U] -= $AMT;
+      - pattern: |
+          $TARGET.call{value: $AMT}("");
+          ...
+          $BAL[$U] = $BAL[$U] - $AMT;
+
+  - id: solidity-reentrancy-no-guard-on-fund-mover
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: WARNING
+    message: |
+      External function moves funds and makes external calls but lacks
+      `nonReentrant`. Add OpenZeppelin's `nonReentrant` modifier.
+    metadata:
+      taxonomy: "Reentrancy"
+      swc: "SWC-107"
+    patterns:
+      - pattern-either:
+          - pattern: |
+              function $FN(...) external $X returns (...) {
+                ...
+                $T.call{value: $V}(...);
+                ...
+              }
+          - pattern: |
+              function $FN(...) external $X {
+                ...
+                $T.call{value: $V}(...);
+                ...
+              }
+      - pattern-not: |
+          function $FN(...) external nonReentrant ... {
+            ...
+          }
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 2. Access Control (SWC-105/106/115)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: solidity-tx-origin-auth
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: ERROR
+    message: |
+      `tx.origin` used for authorization (SWC-115). Replace with `msg.sender`.
+      tx.origin auth is bypassable via phishing-into-an-attacker-contract.
+    metadata:
+      taxonomy: "Access Control"
+      swc: "SWC-115"
+      defi_critical: true
+    pattern-either:
+      - pattern: require(tx.origin == $X, ...);
+      - pattern: require(tx.origin == $X);
+      - pattern: if (tx.origin != $X) revert ...;
+      - pattern: if (tx.origin != $X) { ... }
+
+  - id: solidity-selfdestruct-no-onlyowner
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: ERROR
+    message: |
+      `selfdestruct` reachable from a function without an explicit access-control
+      modifier. Critical: anyone can wipe contract.
+    metadata:
+      taxonomy: "Access Control"
+      swc: "SWC-106"
+      defi_critical: true
+    patterns:
+      - pattern-either:
+          - pattern: |
+              function $FN(...) public { ... selfdestruct($X); ... }
+          - pattern: |
+              function $FN(...) external { ... selfdestruct($X); ... }
+      - pattern-not: |
+          function $FN(...) public onlyOwner { ... selfdestruct($X); ... }
+      - pattern-not: |
+          function $FN(...) external onlyOwner { ... selfdestruct($X); ... }
+      - pattern-not: |
+          function $FN(...) public onlyAdmin { ... selfdestruct($X); ... }
+      - pattern-not: |
+          function $FN(...) external onlyAdmin { ... selfdestruct($X); ... }
+
+  - id: solidity-unprotected-initializer
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: ERROR
+    message: |
+      `initialize*` function lacks the `initializer` modifier. Anyone can
+      front-run init and steal ownership.
+    metadata:
+      taxonomy: "Access Control"
+      swc: "SWC-118"
+      defi_critical: true
+    patterns:
+      - pattern-either:
+          - pattern: |
+              function initialize(...) public {
+                ...
+              }
+          - pattern: |
+              function initialize(...) external {
+                ...
+              }
+      - pattern-not: |
+          function initialize(...) public initializer { ... }
+      - pattern-not: |
+          function initialize(...) external initializer { ... }
+      - pattern-not: |
+          function initialize(...) public reinitializer($N) { ... }
+
+  - id: solidity-pause-without-acl
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: WARNING
+    message: |
+      Pause / emergency control without access-control modifier. Anyone can
+      DoS the protocol.
+    metadata:
+      taxonomy: "Access Control"
+    patterns:
+      - pattern-either:
+          - pattern: function setPaused(...) public { $PAUSED = $V; }
+          - pattern: function setPaused(...) external { $PAUSED = $V; }
+          - pattern: function pause() public { $PAUSED = true; }
+          - pattern: function pause() external { $PAUSED = true; }
+      - pattern-not: |
+          function $FN(...) $X onlyOwner $Y { ... }
+      - pattern-not: |
+          function $FN(...) $X onlyAdmin $Y { ... }
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 4. Unchecked External Calls / Arbitrary Selectors (SWC-104, SWC-127)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: solidity-arbitrary-call-with-user-target
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: ERROR
+    message: |
+      Arbitrary external call where target address comes from a function
+      parameter and the function is callable by anyone. Attacker can call
+      ANY function on ANY contract via this entry point.
+    metadata:
+      taxonomy: "Unchecked External Calls"
+      swc: "SWC-104"
+      defi_critical: true
+    pattern-either:
+      - pattern: |
+          function $FN(address $T, bytes calldata $D) external $X {
+            ...
+            $T.call($D);
+            ...
+          }
+      - pattern: |
+          function $FN(address $T, bytes calldata $D) public $X {
+            ...
+            $T.call($D);
+            ...
+          }
+      - pattern: |
+          function $FN(address $T, bytes memory $D, ...) external $X {
+            ...
+            (bool $OK, ) = $T.call($D);
+            ...
+          }
+
+  - id: solidity-encode-with-signature-user-controlled
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: WARNING
+    message: |
+      `abi.encodeWithSignature(...)` where the signature string is partially
+      built from msg.sender / parameters can collide selectors. Prefer
+      typed interfaces and `abi.encodeCall`.
+    metadata:
+      taxonomy: "Unchecked External Calls"
+    pattern: abi.encodeWithSignature($SIG, ...)
+
+  - id: solidity-low-level-call-no-success-check
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: WARNING
+    message: |
+      `.call{...}(...)` return value not checked. Failed call silently
+      proceeds. Use `(bool ok, ) = ...; require(ok, "...");` or transfer().
+    metadata:
+      taxonomy: "Unchecked External Calls"
+      swc: "SWC-104"
+    patterns:
+      - pattern: $T.call{value: $V}("");
+      - pattern-not: |
+          (bool $OK,) = $T.call{value: $V}("");
+          require($OK, ...);
+      - pattern-not: |
+          (bool $OK,) = $T.call{value: $V}("");
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 6. Oracle Manipulation
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: solidity-spot-price-from-uniswap-v2
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: ERROR
+    message: |
+      Spot price read from a single Uniswap V2 pool's reserves used as oracle.
+      Flash-loan-manipulable in the same tx. Use TWAP (UniswapV2OracleLibrary)
+      or a Chainlink price feed.
+    metadata:
+      taxonomy: "Oracle Manipulation"
+      defi_critical: true
+    pattern-either:
+      - pattern: |
+          ($R0, $R1, ) = $PAIR.getReserves();
+          ...
+          $PRICE = $R1 * $X / $R0;
+      - pattern: |
+          ($R0, $R1, ) = IUniswapV2Pair($P).getReserves();
+          ...
+
+  - id: solidity-chainlink-no-staleness-check
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: WARNING
+    message: |
+      `latestAnswer()` / `latestRoundData()` consumed without checking
+      `updatedAt` against a staleness threshold. Stale price → arb loss.
+    metadata:
+      taxonomy: "Oracle Manipulation"
+    pattern-either:
+      - pattern: |
+          $A = $FEED.latestAnswer();
+      - pattern: |
+          (, int256 $A, , , ) = $FEED.latestRoundData();
+          ...
+          // no use of $UPDATED_AT
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 7. Flash Loan / Same-tx Balance Reliance
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: solidity-balance-of-this-as-collateral
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: WARNING
+    message: |
+      `balanceOf(address(this))` used to derive accounting (price, share, debt).
+      Inflatable via direct token transfer (donation attack) or flash loan.
+      Track an internal accounting variable instead.
+    metadata:
+      taxonomy: "Flash Loan / Donation"
+      defi_critical: true
+    pattern-either:
+      - pattern: $TOKEN.balanceOf(address(this))
+      - pattern: IERC20($T).balanceOf(address(this))
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 9a. Merkle proof
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: solidity-merkle-leaf-encodepacked-with-msg-sender
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: WARNING
+    message: |
+      Merkle leaf built with `abi.encodePacked(msg.sender, ...)`. Packed
+      encoding allows length-collision second-preimage attacks for variadic
+      types. Use `abi.encode(...)` or double-hash leaves.
+    metadata:
+      taxonomy: "Merkle Validation"
+    pattern-either:
+      - pattern: keccak256(abi.encodePacked(msg.sender, $X))
+      - pattern: keccak256(abi.encodePacked($X, msg.sender))
+
+  - id: solidity-merkle-zero-root
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: ERROR
+    message: |
+      Merkle root literal `bytes32(0)` allows forged proofs (anyone can
+      generate a valid proof for an empty tree). Source the root from
+      admin-set storage.
+    metadata:
+      taxonomy: "Merkle Validation"
+      defi_critical: true
+    pattern-either:
+      - pattern: bytes32 constant $ROOT = bytes32(0);
+      - pattern: bytes32 $ROOT = bytes32(0);
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # ERC-4626 / inflation / first-deposit
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: solidity-erc4626-no-virtual-shares
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: WARNING
+    message: |
+      ERC-4626 vault converts assets→shares without virtual share offset
+      (OZ DECIMALS_OFFSET / `_decimalsOffset()`). First-depositor inflation
+      attack possible: attacker mints 1 share, donates 10**N assets, victim's
+      deposit rounds to 0 shares.
+    metadata:
+      taxonomy: "Donation / ERC-4626"
+      defi_critical: true
+    patterns:
+      - pattern: |
+          function convertToShares($A) public view returns (uint256) {
+            return $A * totalSupply() / totalAssets();
+          }
+      - pattern-not-inside: |
+          function _decimalsOffset() internal view virtual returns (uint8) { ... }
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # EIP-2612 permit / EIP-712 domain separator drift
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: solidity-domain-separator-cached-without-chainid-recompute
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: WARNING
+    message: |
+      DOMAIN_SEPARATOR cached at construction. On a chain split / fork, the
+      cached separator is wrong → permit replay across chains. Recompute when
+      `block.chainid != cachedChainId`.
+    metadata:
+      taxonomy: "Signature Replay"
+      swc: "SWC-121"
+    patterns:
+      - pattern: |
+          DOMAIN_SEPARATOR = keccak256(abi.encode($TYPEHASH, ..., block.chainid, ...));
+      - pattern-not-inside: |
+          function DOMAIN_SEPARATOR() public view returns (bytes32) {
+            return block.chainid == $CHAIN_ID_AT_DEPLOY ? $CACHED : _computeDomainSeparator();
+          }
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 10. Code quality / proxies / delegatecall
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: solidity-delegatecall-untrusted-target
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: ERROR
+    message: |
+      `delegatecall` whose target is supplied via parameter or storage that
+      is settable by non-admin code paths. Allows arbitrary code execution
+      against this contract's storage. Pin target to immutable.
+    metadata:
+      taxonomy: "Proxy / Delegatecall"
+      swc: "SWC-112"
+      defi_critical: true
+    pattern-either:
+      - pattern: |
+          function $FN(address $T, bytes calldata $D) $X $Y {
+            ...
+            $T.delegatecall($D);
+            ...
+          }
+      - pattern: $T.delegatecall(abi.encodeWithSelector($SEL, ...))
+
+  - id: solidity-storage-slot-manual
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: INFO
+    message: |
+      Manual storage slot computation. Verify EIP-1967 slot derivation:
+      slot = keccak256("eip1967.proxy.<role>") - 1.
+    metadata:
+      taxonomy: "Proxy / Delegatecall"
+    pattern-either:
+      - pattern: bytes32 constant $SLOT = keccak256("$STR");
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 11. Missing Events on admin actions
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: solidity-set-admin-no-event
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: INFO
+    message: |
+      Admin / fee / treasury setter does not emit an event. Off-chain
+      indexers cannot track changes. Emit `event ParamUpdated(name, old, new)`.
+    metadata:
+      taxonomy: "Missing Events"
+    patterns:
+      - pattern-either:
+          - pattern: function setOwner(...) external { $OWNER = $X; }
+          - pattern: function setFee(...) external { $FEE = $X; }
+          - pattern: function setTreasury(...) external { $T = $X; }
+          - pattern: function setOracle(...) external { $O = $X; }
+      - pattern-not: |
+          function $FN(...) external { $X = $Y; emit $E(...); }
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Bridges (LayerZero OFT)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: solidity-lzreceive-no-src-validation
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: ERROR
+    message: |
+      `lzReceive` does not strictly validate `_srcChainId` AND `_srcAddress`
+      against trustedRemoteLookup. Attacker can spoof messages from any chain.
+    metadata:
+      taxonomy: "Bridge"
+      defi_critical: true
+    patterns:
+      - pattern: |
+          function lzReceive(uint16 $SRC_CHAIN, bytes memory $SRC_ADDR, ...) external {
+            ...
+          }
+      - pattern-not-inside: |
+          require(keccak256($SRC_ADDR) == keccak256(trustedRemoteLookup[$SRC_CHAIN]), ...);
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Governance
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: solidity-governance-balanceof-not-checkpoint
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: ERROR
+    message: |
+      Voting power read via `balanceOf` instead of a checkpointed `getVotes`
+      / `getPastVotes`. Flashloan-vote attack: borrow tokens, vote, repay.
+    metadata:
+      taxonomy: "Governance"
+      defi_critical: true
+    pattern-either:
+      - pattern: |
+          uint256 $POWER = $TOKEN.balanceOf(msg.sender);
+          ...
+          $TOTAL_VOTES_FOR[$P] += $POWER;
+      - pattern: |
+          $TOTAL_VOTES[$P] += $TOKEN.balanceOf(msg.sender);
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Sundry
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - id: solidity-block-timestamp-as-randomness
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: WARNING
+    message: |
+      `block.timestamp` / `block.prevrandao` used as randomness. Predictable
+      and miner-influenceable. Use Chainlink VRF or commit-reveal.
+    metadata:
+      taxonomy: "Logic / Business"
+      swc: "SWC-120"
+    pattern-either:
+      - pattern: keccak256(abi.encodePacked(block.timestamp, ...))
+      - pattern: uint256($X) % $N
+
+  - id: solidity-zero-address-no-check
+    languages: [generic]
+    paths:
+      include: ["*.sol"]
+    severity: INFO
+    message: |
+      Setter accepts an address parameter without zero-address check. Bricks
+      contract if zero accidentally passed.
+    metadata:
+      taxonomy: "Code Quality"
+    patterns:
+      - pattern-either:
+          - pattern: |
+              function setOwner(address $A) external { $OWNER = $A; }
+          - pattern: |
+              function setTreasury(address $A) external { $T = $A; }
+      - pattern-not: |
+          function $FN(address $A) external { require($A != address(0), ...); $X = $A; }
