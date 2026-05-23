@@ -1,3 +1,6 @@
+# Opencode runtime config (never track)
+.opencode/
+
 # Environment
 .env
 .env.local
